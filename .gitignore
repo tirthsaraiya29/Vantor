@@ -124,6 +124,7 @@ Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
+*.exe
 
 # ---- macOS / Linux ----
 .DS_Store
