@@ -1,0 +1,156 @@
+
+# ==========================================
+# VANTOR - Git Ignore
+# ==========================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+virtualenv/
+pip-wheel-metadata/
+
+# Packaging
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+MANIFEST
+
+# ---- IDEs & Editors ----
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# ---- Machine Learning / AI ----
+# Model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.pb
+*.h5
+*.hdf5
+*.keras
+*.tflite
+*.gguf
+*.ggml
+*.bin
+
+# Model cache directories
+models/*
+!models/.gitkeep
+checkpoints/
+weights/
+pretrained/
+huggingface_cache/
+.cache/
+.pytest_cache/
+
+# ---- Datasets ----
+datasets/
+dataset/
+data/raw/
+data/processed/
+*.parquet
+*.arrow
+*.feather
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.joblib
+
+# ---- Databases ----
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# ---- Training / Experiment Outputs ----
+runs/
+logs/
+lightning_logs/
+wandb/
+mlruns/
+tensorboard/
+outputs/
+experiments/
+*.log
+*.tmp
+*.bak
+
+# ---- Security / Anti-Tamper ----
+# Runtime dumps and generated reports
+dumps/
+crashes/
+*.dmp
+*.dump
+
+# ---- Secrets & Credentials ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
+product_keys.txt
+
+# ---- Windows ----
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ---- macOS / Linux ----
+.DS_Store
+.AppleDouble
+.LSOverride
+.Trashes
+.nfs*
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---- Testing / Coverage ----
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+pytestdebug.log
+*.py
+
+# ---- Temporary Files ----
+*.old
+*.orig
+*.rej
+*.cache
+*.temp
+temp/
+tmp/

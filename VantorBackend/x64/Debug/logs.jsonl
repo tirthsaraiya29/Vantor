@@ -1,0 +1,9 @@
+{"SID":"SYS-0000","timestamp":"2025-12-27T05:31:47Z","file path":"SYSTEM","verdict":"ml_init"}
+{"SID":"SYS-0000","timestamp":"2025-12-27T05:31:47Z","file path":"SYSTEM","verdict":"startup"}
+{"SID":"SYS-0000","timestamp":"2025-12-27T09:22:30Z","file path":"SYSTEM","verdict":"ml_init"}
+{"SID":"SYS-0000","timestamp":"2025-12-27T09:22:30Z","file path":"SYSTEM","verdict":"rtp_start"}
+{"SID":"RTP-SERVICE","timestamp":"2025-12-27T09:23:12Z","file path":"C:\\Users\\temp\\Downloads\\Firefox Installer.exe","verdict":"clean"}
+{"SID":"RTP-SERVICE","timestamp":"2025-12-27T09:23:48Z","file path":"C:\\Users\\temp\\Desktop\\Firefox.exe","verdict":"clean"}
+{"SID":"SYS-0000","timestamp":"2025-12-27T09:33:55Z","file path":"SYSTEM","verdict":"ml_init"}
+{"SID":"SYS-0000","timestamp":"2025-12-27T09:33:55Z","file path":"SYSTEM","verdict":"rtp_start"}
+{"SID":"RTP-SERVICE","timestamp":"2025-12-27T09:34:23Z","file path":"C:\\Users\\temp\\Downloads\\Firefox Installer.exe","verdict":"safe"}

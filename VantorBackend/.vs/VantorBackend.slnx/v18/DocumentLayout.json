@@ -1,0 +1,412 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:quarantine.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:VantorBackend.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:quarantine.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_quick.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:scan_quick.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\disk.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:disk.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\RTP.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:RTP.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_full.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:scan_full.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:VantorBackend.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:recursive.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:recursive.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:mlinference.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\memory.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:memory.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:signatures.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\custom.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:custom.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\drive.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:drive.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:heuristic.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:feature_extractor.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:heuristic.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:feature_extractor.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\start_man.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:start_man.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:signatures.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:mlinference.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\logging.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{10325BE6-0BA5-42B9-AA70-4BA0E71155CE}|VantorBackend.vcxproj|solutionrelative:logging.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 5,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "VantorBackend.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.cpp",
+              "RelativeDocumentMoniker": "VantorBackend.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.cpp",
+              "RelativeToolTip": "VantorBackend.cpp",
+              "ViewState": "AgIAALcAAAAAAAAAAAAAAMYAAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-24T16:00:03.802Z",
+              "IsPinned": true
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "VantorBackend.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.h",
+              "RelativeDocumentMoniker": "VantorBackend.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\VantorBackend.h",
+              "RelativeToolTip": "VantorBackend.h",
+              "ViewState": "AgIAAEgAAAAAAAAAAAAAAFgAAAACAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-25T07:13:40.747Z",
+              "IsPinned": true
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "scan_full.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_full.cpp",
+              "RelativeDocumentMoniker": "scan_full.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_full.cpp",
+              "RelativeToolTip": "scan_full.cpp",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAiwBsAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T06:55:03.692Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "scan_quick.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_quick.cpp",
+              "RelativeDocumentMoniker": "scan_quick.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\scan_quick.cpp",
+              "RelativeToolTip": "scan_quick.cpp",
+              "ViewState": "AgIAAAEAAAAAAAAAAAAiwBkAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T06:53:34.813Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "main.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\main.cpp",
+              "RelativeDocumentMoniker": "main.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\main.cpp",
+              "RelativeToolTip": "main.cpp",
+              "ViewState": "AgIAADAAAAAAAAAAAAAAAEYAAAARAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T07:30:44.026Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "disk.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\disk.cpp",
+              "RelativeDocumentMoniker": "disk.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\disk.cpp",
+              "RelativeToolTip": "disk.cpp",
+              "ViewState": "AgIAAN0AAAAAAAAAAAAiwPUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-27T06:27:39.158Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "quarantine.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.cpp",
+              "RelativeDocumentMoniker": "quarantine.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.cpp",
+              "RelativeToolTip": "quarantine.cpp",
+              "ViewState": "AgIAAMMAAAAAAAAAAAAQwNEAAABOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T07:00:00.27Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "quarantine.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.h",
+              "RelativeDocumentMoniker": "quarantine.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\quarantine.h",
+              "RelativeToolTip": "quarantine.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAAeAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-25T07:09:35.545Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "signatures.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.cpp",
+              "RelativeDocumentMoniker": "signatures.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.cpp",
+              "RelativeToolTip": "signatures.cpp",
+              "ViewState": "AgIAABIAAAAAAAAAAAAAACIAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-26T07:09:46.721Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "RTP.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\RTP.cpp",
+              "RelativeDocumentMoniker": "RTP.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\RTP.cpp",
+              "RelativeToolTip": "RTP.cpp",
+              "ViewState": "AgIAAEwBAAAAAAAAAAAiwGQBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-27T09:06:38.062Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "recursive.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.h",
+              "RelativeDocumentMoniker": "recursive.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.h",
+              "RelativeToolTip": "recursive.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-30T06:19:48.653Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "recursive.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.cpp",
+              "RelativeDocumentMoniker": "recursive.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\recursive.cpp",
+              "RelativeToolTip": "recursive.cpp",
+              "ViewState": "AgIAACQAAAAAAAAAAAAiwCkAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-30T06:23:26.511Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "mlinference.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.cpp",
+              "RelativeDocumentMoniker": "mlinference.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.cpp",
+              "RelativeToolTip": "mlinference.cpp",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-26T06:56:30.221Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "memory.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\memory.cpp",
+              "RelativeDocumentMoniker": "memory.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\memory.cpp",
+              "RelativeToolTip": "memory.cpp",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T08:38:18.881Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "drive.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\drive.cpp",
+              "RelativeDocumentMoniker": "drive.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\drive.cpp",
+              "RelativeToolTip": "drive.cpp",
+              "ViewState": "AgIAAAQAAAAAAAAAAAAwwBkAAAAyAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T08:15:10.481Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "custom.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\custom.cpp",
+              "RelativeDocumentMoniker": "custom.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\custom.cpp",
+              "RelativeToolTip": "custom.cpp",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T08:25:05.905Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "heuristic.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.cpp",
+              "RelativeDocumentMoniker": "heuristic.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.cpp",
+              "RelativeToolTip": "heuristic.cpp",
+              "ViewState": "AgIAAEQAAAAAAAAAAAAwwGEAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-25T11:06:25.482Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "feature_extractor.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.cpp",
+              "RelativeDocumentMoniker": "feature_extractor.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.cpp",
+              "RelativeToolTip": "feature_extractor.cpp",
+              "ViewState": "AgIAAGAAAAAAAAAAAAAAAG0AAABTAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-24T16:49:00.637Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "heuristic.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.h",
+              "RelativeDocumentMoniker": "heuristic.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\heuristic.h",
+              "RelativeToolTip": "heuristic.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-26T07:00:14.854Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "feature_extractor.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.h",
+              "RelativeDocumentMoniker": "feature_extractor.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\feature_extractor.h",
+              "RelativeToolTip": "feature_extractor.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-26T06:55:37.522Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": "start_man.cpp",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\start_man.cpp",
+              "RelativeDocumentMoniker": "start_man.cpp",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\start_man.cpp",
+              "RelativeToolTip": "start_man.cpp",
+              "ViewState": "AgIAADsAAAAAAAAAAAAwwE4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-12-27T06:28:00.83Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "signatures.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.h",
+              "RelativeDocumentMoniker": "signatures.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\signatures.h",
+              "RelativeToolTip": "signatures.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-26T07:09:24.527Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 22,
+              "Title": "mlinference.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.h",
+              "RelativeDocumentMoniker": "mlinference.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\mlinference.h",
+              "RelativeToolTip": "mlinference.h",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAACAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-26T06:56:11.208Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 23,
+              "Title": "logging.h",
+              "DocumentMoniker": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\logging.h",
+              "RelativeDocumentMoniker": "logging.h",
+              "ToolTip": "C:\\Users\\tirth\\Downloads\\Project\\Vantor\\VantorBackend\\logging.h",
+              "RelativeToolTip": "logging.h",
+              "ViewState": "AgIAABMAAAAAAAAAAIAwwBwAAAAbAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-12-25T08:23:54.184Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

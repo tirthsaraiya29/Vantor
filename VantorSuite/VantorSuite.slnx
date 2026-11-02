@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="../AntiTamper/AntiTamper.vcxproj" />
+  <Project Path="../Ransomware Burst Detection/RBD/RBD.vcxproj" />
+  <Project Path="../Vantor/Vantor.csproj" />
+  <Project Path="../VantorBackend/VantorBackend.vcxproj" />
+</Solution>

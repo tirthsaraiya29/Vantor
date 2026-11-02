@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="VantorBackend.vcxproj" Id="10325be6-0ba5-42b9-aa70-4ba0e71155ce" />
+</Solution>

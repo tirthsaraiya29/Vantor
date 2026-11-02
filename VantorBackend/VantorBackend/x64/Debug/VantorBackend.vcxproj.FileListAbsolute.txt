@@ -1,0 +1,3 @@
+C:\Users\temp\Downloads\Project\Vantor\VantorBackend\x64\Debug\libcrypto-3-x64.dll
+C:\Users\temp\Downloads\Project\Vantor\VantorBackend\x64\Debug\sqlite3.dll
+C:\Users\temp\Downloads\Project\Vantor\VantorBackend\VantorBackend\x64\Debug\VantorBa.3B6C971D.Up2Date
