@@ -1,33 +1,85 @@
+# ============================================================
+# VANTOR - Repository Ignore Rules
+# ============================================================
 
-# ==========================================
-# VANTOR - Git Ignore
-# ==========================================
+# ------------------------------------------------------------
+# Visual Studio
+# ------------------------------------------------------------
 
-# ---- Python ----
+.vs/
+**/.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# ------------------------------------------------------------
+# .NET / C# build artifacts
+# ------------------------------------------------------------
+
+**/bin/
+**/obj/
+**/TestResults/
+*.dll
+*.exe
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# ------------------------------------------------------------
+# Visual C++ / MSBuild build artifacts
+# ------------------------------------------------------------
+
+**/x64/
+**/x86/
+**/Win32/
+**/Debug/
+**/Release/
+**/ipch/
+**/*.tlog/
+*.ilk
+*.exp
+*.lib
+*.pch
+*.obj
+*.idb
+*.iobj
+*.ipdb
+*.lastbuildstate
+*.recipe
+*.sdf
+*.opensdf
+
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyd
 *.so
-.python-version
 
-# Virtual environments
 .venv/
 venv/
 env/
 ENV/
 virtualenv/
+
+.python-version
 pip-wheel-metadata/
 
-# Packaging
-build/
-dist/
-wheels/
-*.egg-info/
 .eggs/
+*.egg-info/
+wheels/
 MANIFEST
 
-# ---- IDEs & Editors ----
+# ------------------------------------------------------------
+# IDEs and editors
+# ------------------------------------------------------------
+
 .vscode/
 .idea/
 *.sublime-workspace
@@ -37,8 +89,10 @@ MANIFEST
 *.swo
 *~
 
-# ---- Machine Learning / AI ----
-# Model weights and checkpoints
+# ------------------------------------------------------------
+# Machine learning models and checkpoints
+# ------------------------------------------------------------
+
 *.pt
 *.pth
 *.ckpt
@@ -51,23 +105,25 @@ MANIFEST
 *.tflite
 *.gguf
 *.ggml
-*.bin
 
-# Model cache directories
 models/*
 !models/.gitkeep
+
 checkpoints/
 weights/
 pretrained/
 huggingface_cache/
 .cache/
-.pytest_cache/
 
-# ---- Datasets ----
+# ------------------------------------------------------------
+# Datasets and generated ML artifacts
+# ------------------------------------------------------------
+
 datasets/
 dataset/
 data/raw/
 data/processed/
+
 *.parquet
 *.arrow
 *.feather
@@ -77,7 +133,10 @@ data/processed/
 *.pickle
 *.joblib
 
-# ---- Databases ----
+# ------------------------------------------------------------
+# Databases and runtime data
+# ------------------------------------------------------------
+
 *.db
 *.sqlite
 *.sqlite3
@@ -85,73 +144,97 @@ data/processed/
 *.sqlite-wal
 *.sqlite-shm
 
-# ---- Training / Experiment Outputs ----
-runs/
+# ------------------------------------------------------------
+# Logs, reports and runtime output
+# ------------------------------------------------------------
+
 logs/
+runs/
+outputs/
+experiments/
 lightning_logs/
 wandb/
 mlruns/
 tensorboard/
-outputs/
-experiments/
+
 *.log
+*.jsonl
 *.tmp
 *.bak
-
-# ---- Security / Anti-Tamper ----
-# Runtime dumps and generated reports
-dumps/
-crashes/
 *.dmp
 *.dump
 
-# ---- Secrets & Credentials ----
+# ------------------------------------------------------------
+# Security / quarantine runtime data
+# ------------------------------------------------------------
+
+quarantine/
+crashes/
+dumps/
+
+# ------------------------------------------------------------
+# Secrets and credentials
+# ------------------------------------------------------------
+
 .env
 .env.*
 !.env.example
+
 *.pem
 *.key
 *.p12
 *.pfx
 *.jks
 *.keystore
+
 secrets/
 credentials/
 product_keys.txt
 
-# ---- Windows ----
+# ------------------------------------------------------------
+# Windows / macOS / Linux
+# ------------------------------------------------------------
+
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
-*.exe
 
-# ---- macOS / Linux ----
 .DS_Store
 .AppleDouble
 .LSOverride
 .Trashes
 .nfs*
 
-# ---- Jupyter ----
-.ipynb_checkpoints/
-*.ipynb_checkpoints
+# ------------------------------------------------------------
+# Jupyter
+# ------------------------------------------------------------
 
-# ---- Testing / Coverage ----
+.ipynb_checkpoints/
+
+# ------------------------------------------------------------
+# Testing and coverage
+# ------------------------------------------------------------
+
+.pytest_cache/
+.tox/
+.nox/
 .coverage
 .coverage.*
 htmlcov/
-.tox/
-.nox/
 coverage.xml
 pytestdebug.log
 *.py
 
-# ---- Temporary Files ----
+# ------------------------------------------------------------
+# Temporary files
+# ------------------------------------------------------------
+
 *.old
 *.orig
 *.rej
 *.cache
 *.temp
+
 temp/
 tmp/
