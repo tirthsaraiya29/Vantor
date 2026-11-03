@@ -1,0 +1,128 @@
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches:
+      - main
+      - canary
+      - beta
+  pull_request:
+    branches:
+      - main
+      - canary
+      - beta
+  schedule:
+    - cron: "21 20 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: "Detect Changed Languages"
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
+
+      - name: Check changed paths
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            cpp:
+              - '**/*.c'
+              - '**/*.cc'
+              - '**/*.cpp'
+              - '**/*.cxx'
+              - '**/*.h'
+              - '**/*.hh'
+              - '**/*.hpp'
+              - '**/*.hxx'
+              - '**/CMakeLists.txt'
+              - '**/*.cmake'
+              - '**/*.vcxproj'
+              - '**/*.vcxproj.filters'
+              - '**/*.sln'
+            csharp:
+              - '**/*.cs'
+              - '**/*.csx'
+              - '**/*.csproj'
+              - '**/*.sln'
+              - '**/*.props'
+              - '**/*.targets'
+
+      - name: Build CodeQL Matrix
+        id: set-matrix
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CPP_CHANGED: ${{ steps.filter.outputs.cpp }}
+          CSHARP_CHANGED: ${{ steps.filter.outputs.csharp }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            CPP=true
+            CSHARP=true
+          else
+            CPP="${CPP_CHANGED:-false}"
+            CSHARP="${CSHARP_CHANGED:-false}"
+          fi
+
+          ENTRIES=()
+
+          if [[ "$CPP" == "true" ]]; then
+            ENTRIES+=('{"language":"c-cpp","build-mode":"none"}')
+          fi
+
+          if [[ "$CSHARP" == "true" ]]; then
+            ENTRIES+=('{"language":"csharp","build-mode":"none"}')
+          fi
+
+          if [[ ${#ENTRIES[@]} -eq 0 ]]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+          else
+            JOINED=$(IFS=,; echo "${ENTRIES[*]}")
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "matrix={\"include\":[$JOINED]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  analyze:
+    name: "Analyze (${{ matrix.language }})"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-changes.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.2.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v3.28.10
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+          dependency-caching: true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v3.28.10
+        with:
+          category: "/language:${{ matrix.language }}"
