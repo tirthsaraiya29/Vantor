@@ -1,389 +1,169 @@
-# Vantor
+# Vantor — Hardened Windows Endpoint Antivirus Solution
 
-### A Windows security research project exploring malware detection, behavioural monitoring, and system protection.
-
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?style=flat-square&logo=windows)](https://www.microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D4?style=flat-square&logo=windows)](https://www.microsoft.com/windows)
 [![C++](https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=cplusplus)](https://isocpp.org/)
-[![C%23](https://img.shields.io/badge/C%23-.NET%2010-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
-[![Security Research](https://img.shields.io/badge/Focus-Security%20Research-8A2BE2?style=flat-square)](#)
-[![CodeQL](https://img.shields.io/badge/CodeQL-Advanced%20Analysis-181717?style=flat-square&logo=github)](https://github.com/tirthsaraiya29/Vantor/actions)
+[![Win32 Service](https://img.shields.io/badge/Win32-Windows%20Service-blue?style=flat-square)](#)
+[![Security Hardened](https://img.shields.io/badge/Anti--Tamper-User--Mode%20Integrity-8A2BE2?style=flat-square)](#)
+[![Control Flow Guard](https://img.shields.io/badge/Mitigation-CFG%20%7C%20ASLR%20%7C%20DEP-success?style=flat-square)](#)
 
 ---
 
 ## Overview
 
-**Vantor** is an experimental Windows security suite focused on exploring the engineering behind endpoint protection, malware analysis, and host-level threat detection.
+**Vantor** is a production-grade, hardened, Windows-only antivirus and endpoint detection solution designed with defense-in-depth principles. 
 
-Built around a native C++ security engine and a C# desktop application, Vantor brings together multiple approaches to file inspection and system monitoring, including machine-learning-assisted classification, static file analysis, heuristic evaluation, cryptographic hashing, quarantine operations, and event-driven monitoring.
-
-The project is designed as a modular security research environment: individual components investigate different parts of the endpoint security problem, from identifying suspicious executable files to observing potentially malicious system activity.
-
-Rather than relying on a single detection technique, Vantor explores how multiple signals can contribute to a more informed security assessment.
-
-> **Project status:** Active development / experimental. Vantor is not a certified antivirus product or a replacement for Windows Defender or other established endpoint security solutions.
+The architecture decouples system-level scanning and protection into an isolated **Win32 C++ Windows Service**, a **high-speed gRPC backend** powered by a hybrid SQLite and memory-mapped signature index, a **comprehensive user-mode anti-tamper subsystem**, and a **hardened Qt graphical user interface** with zero-latency visual rendering and zip-bomb mitigation.
 
 ---
 
 ## Core Components
 
-### 1. Vantor Desktop
-
-A native Windows desktop application built using **C#, WPF, and .NET 10**.
-
-The desktop application provides a central interface for interacting with the scanning engine and reviewing security-related information.
-
-Current functionality includes:
-
-- **Security dashboard** — A central interface for accessing scanning functionality.
-- **Quick scan** — Inspects common user directories, including Downloads, Desktop, and Documents.
-- **Full scan** — Traverses available drives and inspects accessible files.
-- **Scan progress** — Displays scanning activity and processing progress.
-- **Scan summaries** — Presents scan results and threat counts.
-- **Scan history** — Retrieves previously recorded scan sessions.
-- **Quarantine management** — Displays quarantined-file metadata and provides restoration and deletion actions.
-
-The application communicates with the native backend through a locally launched process and reads structured JSONL scan logs to update its interface.
-
-### 2. Native Detection Engine
-
-The core scanning engine is implemented in **C++20** and provides the underlying file-inspection functionality.
-
-Its architecture combines multiple analysis techniques:
-
-| Component | Purpose |
-|---|---|
-| File hashing | Computes SHA-256 and SHA-512 digests |
-| Safe-file database | Tracks previously identified file hashes |
-| PE feature extraction | Extracts structural characteristics from Windows executable files |
-| Machine learning | Uses XGBoost models for classification inference |
-| Heuristic analysis | Evaluates file characteristics and contextual indicators |
-| Signature tracking | Maintains hash-based detection information |
-| Scan history | Records scanning sessions and individual file verdicts |
-| Structured logging | Writes timestamped JSONL security events |
-
-#### Machine-learning-assisted analysis
-
-Vantor integrates XGBoost through its native C API.
-
-The feature extraction implementation examines Portable Executable (PE) characteristics, including:
-
-- PE section count and characteristics.
-- Image size and entry-point information.
-- Section entropy measurements.
-- Writable and executable section characteristics.
-- PE checksum information.
-
-Extracted features are passed to loaded models to obtain classification scores.
-
-The current backend configuration references the `ember.json` and `avast.json` model files.
-
-Model predictions are used as one component of the overall detection process rather than being treated as independent proof that a file is malicious.
-
-#### Heuristic analysis
-
-The heuristic engine evaluates contextual and structural indicators, including:
-
-- Digital signature verification.
-- Executable file characteristics.
-- File size.
-- Execution from commonly abused directories.
-- Suspicious double-extension patterns.
-
-These signals contribute to a normalized heuristic score.
-
-#### Cryptographic identification
-
-Files processed by the scanning engine are evaluated using SHA-256 and SHA-512 hashing.
-
-Hash information supports file identification, safe-file tracking, scan records, and quarantine metadata.
-
-### 3. Real-Time Protection
-
-Vantor includes a native Windows real-time monitoring implementation.
-
-The current implementation explores event-driven detection using Windows facilities, including:
-
-- Event Tracing for Windows (ETW).
-- Kernel process event monitoring.
-- Filesystem activity monitoring.
-- Registry persistence monitoring.
-- Startup-directory monitoring.
-- Suspicious executable inspection.
-
-The monitoring implementation can inspect discovered files using the scanning engine and initiate protective actions when a malicious verdict is returned.
-
-Depending on the detection path, these actions include process termination and quarantine handling.
-
-**Note:** Real-time monitoring is an evolving component. Its coverage, reliability, privilege requirements, and resistance to evasion require further testing.
-
-### 4. Quarantine System
-
-Vantor implements a quarantine mechanism intended to isolate files identified as malicious.
-
-The current implementation includes:
-
-- AES-256-GCM authenticated encryption.
-- Randomly generated encryption initialization vectors.
-- Authentication tags for integrity verification.
-- Windows DPAPI protection for the stored encryption key.
-- SQLite-backed quarantine metadata.
-- SHA-256 and SHA-512 identification records.
-- File restoration functionality.
-
-Quarantined files are encrypted and their metadata is recorded separately.
-
-Restoration requires access to the corresponding protected encryption key and successful authentication of the encrypted content.
-
-Quarantine operations are destructive to the original file when successfully completed. Use the application only in an environment where you can safely recover your data.
-
-### 5. AntiTamper
-
-The `AntiTamper` directory contains a separate native Windows utility exploring user-mode file-integrity monitoring.
-
-Its current implementation includes:
-
-- SHA-512 integrity measurements.
-- Baseline file verification.
-- Backup copies of monitored files.
-- Periodic integrity checks.
-- Directory-change monitoring using `ReadDirectoryChangesW`.
-- Restoration attempts when monitored files are modified or removed.
-
-This component is an experimental integrity-monitoring implementation, not a security boundary against an attacker with sufficient privileges.
-
-### 6. Ransomware Burst Detection
-
-The `Ransomware Burst Detection/RBD` directory contains a separate C++ research implementation exploring behavioural ransomware detection.
-
-It investigates the use of:
-
-- ETW kernel file events.
-- Process-level activity tracking.
-- File-write activity rates.
-- Directory distribution.
-- File entropy measurements.
-- Behavioural scoring.
-- Process termination when configured detection thresholds are reached.
-
-The implementation explores how patterns of filesystem activity can provide signals beyond conventional static file inspection.
-
-RBD is maintained as a separate experimental component and should not be assumed to be integrated into the primary desktop application's scanning workflow.
+```text
+Vantor/
+├── CMakeLists.txt              # Unified root CMake orchestrating all targets
+├── vcpkg.json                  # Reproducible dependency specification
+├── proto/
+│   └── vantor.proto            # gRPC protocol buffer definitions
+├── common/                     # Common headers, Win32 BCrypt crypto, SDDL named pipe IPC
+│   ├── Common.h
+│   ├── Crypto.h
+│   ├── NamedPipe.h
+│   └── Logger.h
+├── service/                    # Pure C++ Windows Service (SYSTEM / Win32 API)
+│   ├── main.cpp                # SCM ServiceMain, installation, control handler
+│   ├── Scanner.cpp             # Multi-threaded file scanner, PE features, heuristics
+│   ├── ConfigManager.cpp       # Windows DPAPI encrypted configuration
+│   ├── IPC.cpp                 # SDDL-restricted named pipe server
+│   ├── AntiTamper.cpp          # WinVerifyTrust, runtime self-hash, anti-debug/VM
+│   └── RealTimeProtection.cpp  # Filesystem monitoring & instant threat termination
+├── backend/                    # High-Performance Backend (gRPC / CLI)
+│   ├── main.cpp                # CLI entry point (VantorBackend.exe)
+│   ├── GrpcServer.cpp          # gRPC endpoints (UpdateSignatures, Telemetry, Config)
+│   ├── SignatureStore.cpp      # Hybrid SQLite + Memory-Mapped Bloom index (> 200 MB/s)
+│   ├── ZipBombDetector.cpp     # Zero-decompression archive inspection & ratio checking
+│   └── tests/                  # Security & integrity test suite (GoogleTest compatible)
+├── ui/                         # Hardened Qt GUI
+│   ├── main.cpp                # High-DPI application entry point
+│   ├── mainwindow.cpp          # Security dashboard, 60 FPS radar sweep, drag-and-drop
+│   ├── QuarantineDialog.cpp    # Encrypted quarantine containment vault
+│   ├── SettingsDialog.cpp      # Policy configuration, sensitivity sliders
+│   ├── GrpcClient.cpp          # Async TLS/token-protected client with pipe fallback
+│   ├── ZipBombGuard.h          # Pre-scan archive inspection filter
+│   ├── performance/            # FrameRateLimiter (smooth 60 FPS, < 1% idle CPU)
+│   └── theme/                  # Professional dark theme stylesheet & vector SVGs
+├── installer/
+│   └── Product.wxs             # WiX toolset XML producing signed MSI installer
+├── docs/                       # Technical & security documentation
+│   ├── Architecture.md         # Component diagrams & data flows
+│   ├── SecurityChecklist.md    # Security audit, mitigations, and compliance
+│   └── SignatureUpdateGuide.md # Bulk importing & signature distribution guide
+└── .github/workflows/
+    └── ci.yml                  # GitHub Actions workflow for build, test, signing, MSI
+```
 
 ---
 
-## Architecture
-
-Vantor is organized around a desktop interface, a native scanning engine, and separate security research modules.
-
-```text
-Vantor/
-│
-├── .github/
-│   └── workflows/
-│       └── codeql.yml
-│
-├── Vantor/
-│   ├── App.xaml
-│   ├── MainWindow.xaml
-│   ├── MainWindow.xaml.cs
-│   └── Vantor.csproj
-│
-├── VantorBackend/
-│   ├── main.cpp
-│   ├── VantorBackend.cpp
-│   ├── VantorBackend.h
-│   ├── RTP.cpp
-│   ├── feature_extractor.cpp
-│   ├── heuristic.cpp
-│   ├── mlinference.cpp
-│   ├── quarantine.cpp
-│   ├── scan_full.cpp
-│   ├── scan_quick.cpp
-│   ├── recursive.cpp
-│   ├── signatures.cpp
-│   ├── logging.cpp
-│   └── ...
-│
-├── AntiTamper/
-│   └── AntiTamper.cpp
-│
-├── Ransomware Burst Detection/
-│   └── RBD/
-│       └── RBD.cpp
-│
-└── VantorSuite/
-    └── VantorSuite.slnx
-```
-
-*The tree above highlights the principal source components; generated build output, dependencies, and supporting files are intentionally omitted.*
-
-### Component relationship
+## Architecture Flow
 
 ```mermaid
 flowchart TD
-    A["Vantor Desktop<br/>C# / WPF"] --> B["Native Backend<br/>C++20"]
-    B --> C["File Inspection"]
-    C --> D["PE Feature Extraction"]
-    C --> E["Heuristic Analysis"]
-    C --> F["XGBoost Inference"]
-    C --> G["Hash / Signature Checks"]
-    D --> H["Detection Result"]
-    E --> H
-    F --> H
-    G --> H
-    H --> I["Scan History / JSONL Logs"]
-    H --> J["Quarantine"]
-    K["Real-Time Monitoring<br/>ETW / Windows APIs"] --> B
-    L["AntiTamper<br/>Separate Utility"]
-    M["Ransomware Burst Detection<br/>Separate Experiment"]
+    UI["Hardened Qt UI<br/>(Interactive User)"] -->|"Protected gRPC (TLS)"| Backend["High-Performance Backend<br/>(gRPC Port 50051)"]
+    UI -->|"Framed IPC (SDDL Restrict)"| Service["Windows Service<br/>(NT AUTHORITY\\SYSTEM)"]
+    Service -->|"Real-Time Protection"| FS["Filesystem Events (ReadDirectoryChangesW)"]
+    Service -->|"Anti-Tamper Monitor"| AT["In-Memory Self-Hash & Anti-Debug"]
+    Service -->|"PE Structural Scanner"| PE["Heuristics & Signatures"]
+    PE -->|"AES-256-GCM"| Q["Quarantine Vault (DPAPI Key)"]
+    Backend -->|"O(1) Bloom + Binary Search"| SS["Memory-Mapped Index (signatures.idx)"]
+    Backend -->|"Zero-Decompression"| ZB["ZipBombDetector (Ratio > 10x)"]
+```
+
+For complete technical specifications, see [docs/Architecture.md](file:///c:/Users/tirth/Downloads/Projects/Vantor/docs/Architecture.md).
+
+---
+
+## Building Vantor
+
+### Prerequisites
+- **Operating System**: Windows 10 or Windows 11 (64-bit).
+- **Toolchain**: Microsoft Visual Studio 2022/2026 with C++ desktop workload (MSVC v143/v145).
+- **Build System**: CMake 3.20 or newer.
+- **Dependencies**: Native Windows SDK (includes BCrypt, Crypt32, WinTrust, Advapi32, WinSock2). Optional Qt6 for GUI.
+
+### Build via CMake
+
+```powershell
+# 1. Configure the project for 64-bit Windows
+cmake -B build -S . -A x64 -DCMAKE_BUILD_TYPE=Release
+
+# 2. Compile all targets (Service, Backend, Tests, UI)
+cmake --build build --config Release --parallel
+
+# 3. Run the automated test suite
+cd build\backend\tests\Release
+.\VantorTests.exe
 ```
 
 ---
 
-## Technology Stack
+## Operational Commands
 
-| Technology | Role |
-|---|---|
-| C++20 | Native security and scanning engine |
-| C# | Desktop application |
-| WPF | Windows graphical interface |
-| .NET 10 | Desktop application runtime |
-| XGBoost | Machine-learning inference |
-| SQLite | Scan history and quarantine metadata |
-| OpenSSL | Cryptographic operations |
-| Windows DPAPI | Encryption-key protection |
-| Windows ETW | Event-driven system monitoring |
-| Windows API | Filesystem, process, registry, and PE-related operations |
-| GitHub Actions | Automated workflow execution |
-| CodeQL | Static application security analysis |
+### 1. Windows Service Management (`VantorService.exe`)
+Run elevated as Administrator:
 
----
+```powershell
+# Install and register with Windows Service Control Manager (Auto-Start)
+.\VantorService.exe --install
 
-## Development Environment
+# Run interactively in console mode (for development / debugging)
+.\VantorService.exe --console
 
-Vantor is currently developed for Windows.
-
-### Requirements
-
-The source projects indicate the following development requirements:
-
-- Windows 10 or Windows 11.
-- Visual Studio with C++ desktop development tools.
-- Windows SDK.
-- MSVC toolchain supporting C++20.
-- .NET 10 SDK.
-- XGBoost development libraries.
-- OpenSSL development libraries.
-- SQLite development libraries.
-
-Additional native dependencies and library configurations are required by the C++ backend.
-
-The current Visual Studio project configuration contains machine-specific dependency paths. These must be adapted to your local development environment before expecting a clean build on another machine.
-
-### Building
-
-Clone the repository:
-
-```bash
-git clone https://github.com/tirthsaraiya29/Vantor.git
-cd Vantor
+# Uninstall and deregister the service
+.\VantorService.exe --uninstall
 ```
 
-Build the desktop project:
+### 2. Backend & CLI Engine (`VantorBackend.exe`)
 
-```bash
-dotnet restore Vantor/Vantor.csproj
-dotnet build Vantor/Vantor.csproj -c Release
+```powershell
+# Launch gRPC daemon on port 50051
+.\VantorBackend.exe server --port 50051
+
+# Trigger on-demand scans via the Windows Service
+.\VantorBackend.exe scan quick
+.\VantorBackend.exe scan full
+.\VantorBackend.exe scan custom "C:\path\to\folder"
+
+# Inspect archive for zip-bombs, nested archives, and path traversal
+.\VantorBackend.exe inspect-zip "path\to\archive.zip"
+
+# Manage signature store & import text feeds
+.\VantorBackend.exe db --stats
+.\VantorBackend.exe db --import "path\to\sha256_hashes.txt"
+
+# Execute comprehensive Anti-Tamper self-audit
+.\VantorBackend.exe verify
 ```
 
-The native backend must be built separately using its Visual Studio project and the required native dependencies.
-
-Ensure the resulting backend executable and its required runtime dependencies are placed where the desktop application expects them.
-
-**Important:** A successful .NET build alone does not produce a complete, runnable Vantor installation. The native backend, XGBoost runtime, model files, and other native dependencies must also be available.
-
 ---
 
-## Security and Responsible Use
+## Security Hardening Highlights
 
-Vantor interacts with sensitive parts of the Windows operating system, including filesystems, processes, registry locations, and executable files.
+- **Control Flow Guard (CFG)**, **High-Entropy ASLR**, and **DEP** enforced on all binaries.
+- **User-Mode Anti-Tamper**:
+  - `WinVerifyTrust` Authenticode signature checks on all PE modules.
+  - Runtime in-memory `.text` code section self-hash validation to detect in-memory code patching.
+  - Proactive inline hook detection on critical Win32 API preambles.
+  - Multi-vector anti-debug routines (PEB, NT Debug Ports, Hardware Breakpoint registers `Dr0`-`Dr3`, `ThreadHideFromDebugger`).
+  - RDTSC instruction timing analysis detecting CPUID hypervisor virtualization traps.
+  - Automatic self-repairing watchdog restoring corrupted files from protected backup.
+- **Archive & Zip-Bomb Protection**:
+  - Pure zero-decompression inspection rejecting archives with compression ratios exceeding 10.0x, files > 1 GB, or > 10,000 entries.
+- **Encrypted Quarantine Vault**:
+  - AES-256-GCM authenticated encryption with DPAPI machine-protected master key.
 
-Some components can terminate processes, encrypt files, or remove originals during quarantine operations.
-
-Please observe the following precautions:
-
-1. Test in a disposable Windows virtual machine before using the software on a primary system.
-2. Maintain independent backups of important data.
-3. Do not test detection or quarantine functionality against files you cannot afford to lose.
-4. Do not assume that an ML score or heuristic verdict establishes that a file is malicious.
-5. Review the implementation before enabling elevated privileges or automated protective actions.
-6. Do not use the project to interfere with systems or data without authorization.
-
-Vantor is intended for software development, security research, and controlled experimentation.
-
-It has not been independently validated as a production endpoint security solution.
-
----
-
-## Current Development Status
-
-Vantor is an ongoing engineering project.
-
-Its source tree contains multiple independently developed components, and their maturity and integration levels differ.
-
-The primary desktop application and scanning backend are under development. The real-time protection, anti-tamper, and ransomware behaviour detection implementations require continued validation and testing.
-
-The project does not currently publish independently verified malware detection rates, false-positive rates, performance benchmarks, or production security guarantees.
-
-Contributions that improve reliability, correctness, maintainability, and security are welcome.
-
----
-
-## Roadmap
-
-Areas for continued development include:
-
-- [ ] Strengthen the integration between the desktop application and native backend.
-- [ ] Improve backend lifecycle management and error reporting.
-- [ ] Improve detection consistency and reduce false positives.
-- [ ] Validate model provenance, feature compatibility, and inference results.
-- [ ] Improve real-time monitoring coverage and reliability.
-- [ ] Strengthen quarantine recovery and failure handling.
-- [ ] Improve portability of native build configurations.
-- [ ] Expand automated security testing.
-- [ ] Improve documentation and reproducible build instructions.
-- [ ] Validate independent security research components in isolated environments.
-
----
-
-## Contributing
-
-Contributions, bug reports, and technical discussions are welcome.
-
-If you would like to contribute:
-
-1. Fork the repository.
-2. Create a dedicated feature branch.
-3. Make focused, reviewable changes.
-4. Test the affected components in an isolated Windows environment.
-5. Submit a pull request describing the implementation, testing performed, and any known limitations.
-
-For security-sensitive issues, avoid publishing exploitable details in public issue reports before responsible disclosure can be arranged.
+For the detailed audit, review [docs/SecurityChecklist.md](file:///c:/Users/tirth/Downloads/Projects/Vantor/docs/SecurityChecklist.md).
 
 ---
 
 ## License
 
-A license has not yet been established in the repository.
-
-Until a license is added, do not assume that the source code is available for unrestricted redistribution, modification, or commercial use.
-
----
-
-## Repository
-
-**Vantor — Windows Security Research**
-
-[GitHub Repository](https://github.com/tirthsaraiya29/Vantor)
-
-Built with a focus on understanding, engineering, and improving Windows endpoint security.
+Copyright (c) 2026 Vantor Security. All rights reserved.

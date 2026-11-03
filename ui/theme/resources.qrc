@@ -1,0 +1,15 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>style.qss</file>
+        <file>icons/shield.svg</file>
+        <file>icons/scan.svg</file>
+        <file>icons/quarantine.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/check.svg</file>
+        <file>icons/warning.svg</file>
+        <file>icons/folder.svg</file>
+        <file>icons/close.svg</file>
+        <file>icons/minimize.svg</file>
+    </qresource>
+</RCC>

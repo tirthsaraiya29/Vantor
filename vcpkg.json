@@ -1,0 +1,20 @@
+{
+  "name": "vantor-antivirus",
+  "version-string": "2.0.0",
+  "homepage": "https://github.com/tirthsaraiya29/Vantor",
+  "description": "Production-grade, hardened Windows antivirus solution with native C++ Windows Service, memory-mapped signature index, and user-mode anti-tamper.",
+  "dependencies": [
+    "sqlite3",
+    "gtest",
+    "protobuf",
+    "grpc"
+  ],
+  "features": {
+    "gui": {
+      "description": "Hardened Qt graphical user interface",
+      "dependencies": [
+        "qtbase"
+      ]
+    }
+  }
+}

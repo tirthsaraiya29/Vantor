@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" 
+             Name="Vantor Antivirus Endpoint Protection" 
+             Language="1033" 
+             Version="2.0.0.0" 
+             Manufacturer="Vantor Security" 
+             UpgradeCode="9B7C3E2D-4F1A-48B2-9A63-8C2E7F5A1D90">
+             
+        <Package InstallerVersion="500" 
+                 Compressed="yes" 
+                 InstallScope="perMachine" 
+                 Platform="x64" 
+                 Description="Vantor Antivirus Production Installer" />
+
+        <MajorUpgrade DowngradeErrorMessage="A newer version of Vantor Antivirus is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="Vantor Antivirus Core" Level="1">
+            <ComponentGroupRef Id="ProductComponents" />
+            <ComponentGroupRef Id="StartMenuComponents" />
+        </Feature>
+    </Product>
+
+    <Fragment>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <!-- Program Files (64-bit) -->
+            <Directory Id="ProgramFiles64Folder">
+                <Directory Id="INSTALLFOLDER" Name="Vantor">
+                    <Directory Id="QUARANTINEFOLDER" Name="quarantine" />
+                </Directory>
+            </Directory>
+            <!-- ProgramData -->
+            <Directory Id="CommonAppDataFolder">
+                <Directory Id="VantorDataFolder" Name="Vantor">
+                    <Directory Id="ATBackupFolder" Name="ATBackup" />
+                </Directory>
+            </Directory>
+            <!-- Start Menu -->
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="Vantor Antivirus" />
+            </Directory>
+        </Directory>
+    </Fragment>
+
+    <Fragment>
+        <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+            <!-- Windows Service Executable -->
+            <Component Id="VantorServiceComponent" Win64="yes" Guid="1F3B5C7D-9A2E-4B8F-9C1D-3E5A7B9F1D2C">
+                <File Id="VantorServiceExe" Source="$(var.BinDir)\VantorService.exe" KeyPath="yes" />
+                <ServiceInstall Id="ServiceInstaller"
+                                Type="ownProcess"
+                                Vital="yes"
+                                Name="VantorAntivirusService"
+                                DisplayName="Vantor Antivirus Endpoint Service"
+                                Description="Provides continuous filesystem monitoring, real-time protection, and user-mode anti-tamper."
+                                Start="auto"
+                                Account="NT AUTHORITY\LocalSystem"
+                                ErrorControl="normal"
+                                Interactive="no" />
+                <ServiceControl Id="ServiceControl"
+                                Name="VantorAntivirusService"
+                                Start="install"
+                                Stop="both"
+                                Remove="uninstall"
+                                Wait="yes" />
+            </Component>
+
+            <!-- Backend Executable -->
+            <Component Id="VantorBackendComponent" Win64="yes" Guid="2F4C6D8E-0B3F-5C9A-0D2E-4F6B8C0E2F3D">
+                <File Id="VantorBackendExe" Source="$(var.BinDir)\VantorBackend.exe" KeyPath="yes" />
+            </Component>
+
+            <!-- UI Executable -->
+            <Component Id="VantorUIComponent" Win64="yes" Guid="3A5D7E9F-1C4A-6D0B-1E3F-5A7C9D1F3A4E">
+                <File Id="VantorUIExe" Source="$(var.BinDir)\VantorUI.exe" KeyPath="yes" />
+            </Component>
+
+            <!-- SQLite Runtime Library -->
+            <Component Id="SqliteDllComponent" Win64="yes" Guid="4B6E8F0A-2D5B-7E1C-2F4A-6B8D0E2A4B5F">
+                <File Id="SqliteDll" Source="$(var.BinDir)\sqlite3.dll" KeyPath="yes" />
+            </Component>
+
+            <!-- Initial Database & Index Files -->
+            <Component Id="SignaturesDbComponent" Win64="yes" Guid="5C7F9A1B-3E6C-8F2D-3A5B-7C9E1F3B5C6A">
+                <File Id="SignaturesDb" Source="$(var.BinDir)\signatures.db" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
+        <!-- Start Menu Shortcuts -->
+        <ComponentGroup Id="StartMenuComponents" Directory="ApplicationProgramsFolder">
+            <Component Id="ApplicationShortcut" Win64="yes" Guid="6D8A0B2C-4F7D-9A3E-4B6C-8D0F2A4C6D7B">
+                <Shortcut Id="ApplicationStartMenuShortcut"
+                          Name="Vantor Antivirus"
+                          Description="Launch Vantor Antivirus Endpoint Protection"
+                          Target="[INSTALLFOLDER]VantorUI.exe"
+                          WorkingDirectory="INSTALLFOLDER" />
+                <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\VantorSecurity\Vantor" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+    </Fragment>
+</Wix>

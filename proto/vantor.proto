@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package vantor;
+
+// Service definition for Vantor Antivirus Backend
+service VantorBackendService {
+    // Updates local signature database with new hashes or from a remote feed
+    rpc UpdateSignatures(SignatureUpdateRequest) returns (SignatureUpdateResponse);
+
+    // Submits anonymous telemetry and threat intelligence events
+    rpc SubmitTelemetry(TelemetryEvent) returns (TelemetryResponse);
+
+    // Retrieves current engine configuration and signature stats
+    rpc GetConfig(ConfigRequest) returns (ConfigResponse);
+
+    // Starts a scan operation and streams live progress events
+    rpc TriggerScan(ScanRequest) returns (stream ScanProgress);
+
+    // Retrieves list of currently quarantined files
+    rpc GetQuarantineList(QuarantineListRequest) returns (QuarantineListResponse);
+
+    // Restores a quarantined file to disk
+    rpc RestoreQuarantine(QuarantineActionRequest) returns (QuarantineActionResponse);
+
+    // Permanently purges a quarantined file
+    rpc DeleteQuarantine(QuarantineActionRequest) returns (QuarantineActionResponse);
+}
+
+message SignatureUpdateRequest {
+    string client_version = 1;
+    repeated string sha256_hashes = 2;
+    string update_source_url = 3;
+    bool force_rebuild_index = 4;
+}
+
+message SignatureUpdateResponse {
+    bool success = 1;
+    int32 signatures_added = 2;
+    int64 total_signatures = 3;
+    string message = 4;
+    int64 index_timestamp = 5;
+}
+
+message TelemetryEvent {
+    string event_id = 1;
+    string event_type = 2;       // "scan_threat", "rtp_block", "anti_tamper_alert", "heartbeat"
+    string timestamp = 3;
+    string file_path = 4;
+    string file_sha256 = 5;
+    string threat_name = 6;
+    double heuristic_score = 7;
+    double ml_score = 8;
+    string machine_guid = 9;
+    string os_version = 10;
+}
+
+message TelemetryResponse {
+    bool accepted = 1;
+    string server_time = 2;
+}
+
+message ConfigRequest {
+    string client_id = 1;
+}
+
+message ConfigResponse {
+    string version = 1;
+    bool rtp_enabled = 2;
+    double heuristic_threshold = 3;
+    double zip_bomb_ratio_limit = 4;
+    int64 max_archive_uncompressed_bytes = 5;
+    int64 total_signatures = 6;
+    repeated string excluded_paths = 7;
+    string last_updated = 8;
+    bool anti_tamper_enforced = 9;
+}
+
+message ScanRequest {
+    string scan_type = 1;        // "quick", "full", "custom"
+    string target_path = 2;      // Path for custom scan
+    bool auto_quarantine = 3;
+}
+
+message ScanProgress {
+    string session_id = 1;
+    int32 files_scanned = 2;
+    int32 threats_detected = 3;
+    int32 files_quarantined = 4;
+    string current_file = 5;
+    float percent_complete = 6;
+    bool is_complete = 7;
+    string error_message = 8;
+}
+
+message QuarantineListRequest {
+    int32 page_number = 1;
+    int32 page_size = 2;
+}
+
+message QuarantineRecord {
+    int64 id = 1;
+    string original_path = 2;
+    string encrypted_filename = 3;
+    string sha256 = 4;
+    string sha512 = 5;
+    string detection_time = 6;
+    string threat_classification = 7;
+    int64 file_size_bytes = 8;
+}
+
+message QuarantineListResponse {
+    repeated QuarantineRecord items = 1;
+    int32 total_count = 2;
+}
+
+message QuarantineActionRequest {
+    int64 item_id = 1;
+    string target_restore_path = 2;  // Optional alternative path
+}
+
+message QuarantineActionResponse {
+    bool success = 1;
+    string message = 2;
+}

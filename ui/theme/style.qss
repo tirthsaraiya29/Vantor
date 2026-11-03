@@ -1,0 +1,200 @@
+/* Vantor Antivirus Professional Hardened Dark Theme */
+
+QWidget {
+    background-color: #0b0f19;
+    color: #e2e8f0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    outline: none;
+}
+
+QMainWindow {
+    background-color: #0b0f19;
+}
+
+QDialog {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+}
+
+/* Sidebar & Navigation */
+#sidebarPanel {
+    background-color: #070a12;
+    border-right: 1px solid #1e293b;
+}
+
+#navButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+#navButton:hover {
+    background-color: #1e293b;
+    color: #f8fafc;
+}
+
+#navButton:checked, #navButton:pressed {
+    background-color: #1e293b;
+    color: #38bdf8;
+    border-left: 3px solid #38bdf8;
+}
+
+/* Cards & Surface Containers */
+QFrame#card {
+    background-color: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+}
+
+QFrame#statusCardSafe {
+    background-color: #064e3b;
+    border: 1px solid #059669;
+    border-radius: 10px;
+}
+
+QFrame#statusCardThreat {
+    background-color: #7f1d1d;
+    border: 1px solid #dc2626;
+    border-radius: 10px;
+}
+
+/* Standard Buttons */
+QPushButton {
+    background-color: #1e293b;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #334155;
+    border-color: #475569;
+}
+
+QPushButton:pressed {
+    background-color: #0f172a;
+}
+
+QPushButton:disabled {
+    background-color: #0f172a;
+    color: #475569;
+    border-color: #1e293b;
+}
+
+QPushButton#btnPrimary {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0284c7, stop:1 #0369a1);
+    border: 1px solid #38bdf8;
+    color: #ffffff;
+}
+
+QPushButton#btnPrimary:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0369a1, stop:1 #0284c7);
+}
+
+QPushButton#btnDanger {
+    background-color: #b91c1c;
+    border: 1px solid #ef4444;
+    color: #ffffff;
+}
+
+QPushButton#btnDanger:hover {
+    background-color: #dc2626;
+}
+
+/* Progress Bar */
+QProgressBar {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    height: 12px;
+    text-align: center;
+    color: #f8fafc;
+    font-size: 11px;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #38bdf8, stop:1 #06b6d4);
+    border-radius: 4px;
+}
+
+/* Tables & Lists */
+QTableWidget {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    gridline-color: #1e293b;
+    selection-background-color: #1e293b;
+    selection-color: #38bdf8;
+}
+
+QHeaderView::section {
+    background-color: #111827;
+    color: #94a3b8;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid #1e293b;
+    font-weight: 600;
+}
+
+/* Input Fields */
+QLineEdit {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #f8fafc;
+}
+
+QLineEdit:focus {
+    border-color: #38bdf8;
+}
+
+/* Sliders */
+QSlider::groove:horizontal {
+    background: #1e293b;
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #38bdf8;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #f8fafc;
+    border: 2px solid #38bdf8;
+    width: 16px;
+    margin-top: -5px;
+    margin-bottom: -5px;
+    border-radius: 8px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background: #0b0f19;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #334155;
+    border-radius: 4px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #475569;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}

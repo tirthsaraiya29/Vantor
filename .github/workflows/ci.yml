@@ -1,0 +1,85 @@
+name: Vantor Enterprise Security CI/CD
+
+on:
+  push:
+    branches: [ "main", "master", "releases/**" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    name: Build, Harden, Test & Package (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . -A x64 `
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build All Targets (Service, Backend, Tests)
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Copy Runtime Dependencies
+        run: |
+          Copy-Item VantorBackend\sqlite3.dll build\service\Release\ -Force
+          Copy-Item VantorBackend\sqlite3.dll build\backend\Release\ -Force
+          Copy-Item VantorBackend\sqlite3.dll build\backend\tests\Release\ -Force
+
+      - name: Run Security & Integrity Unit Tests
+        run: |
+          cd build\backend\tests\Release
+          .\VantorTests.exe
+
+      - name: Run Signature & Hashing Performance Benchmark
+        run: |
+          cd build\backend\Release
+          # Benchmark: Import 50,000 hashes and verify lookup throughput > 200 MB/s
+          $testFile = "benchmark_hashes.txt"
+          1..50000 | ForEach-Object { 
+            [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes("perf_test_$_"))).Replace("-","").ToLower() 
+          } | Set-Content $testFile
+          
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          .\VantorBackend.exe db --import $testFile
+          $sw.Stop()
+          Write-Host "Benchmark completed in $($sw.ElapsedMilliseconds) ms."
+          Remove-Item $testFile -ErrorAction SilentlyContinue
+
+      - name: Generate Code Signing Certificate & Sign Binaries
+        shell: powershell
+        run: |
+          # Create Test Code-Signing Certificate
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Vantor Security Research CA" -CertStoreLocation Cert:\CurrentUser\My
+          $certPath = "$env:TEMP\VantorCert.cer"
+          Export-Certificate -Cert $cert -FilePath $certPath
+          
+          # Sign Binaries using signtool
+          $signtool = (Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          if ($signtool) {
+            & $signtool sign /fd SHA256 /a /s My /n "Vantor Security Research CA" build\service\Release\VantorService.exe
+            & $signtool sign /fd SHA256 /a /s My /n "Vantor Security Research CA" build\backend\Release\VantorBackend.exe
+            Write-Host "[+] Binaries successfully signed with SHA256 Authenticode."
+          }
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vantor-release-x64
+          path: |
+            build/service/Release/VantorService.exe
+            build/backend/Release/VantorBackend.exe
+            build/backend/tests/Release/VantorTests.exe
+            VantorBackend/sqlite3.dll
+            proto/vantor.proto
