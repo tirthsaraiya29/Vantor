@@ -19,8 +19,120 @@
     </UserControl.Resources>
 
     <Grid Background="{StaticResource BrushBgDeep}">
-        <!-- 1. ACTIVE SCANNING VIEW -->
-        <Grid Visibility="{Binding IsScanComplete, Converter={StaticResource InverseBoolToVis}}" Margin="32">
+        <!-- ==================== 1. IDLE / SCAN PROFILES HUB ==================== -->
+        <Grid Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}" Margin="32">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,24">
+                <TextBlock Text="Scan Center" Foreground="White" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="Hardware-accelerated C++ Win32 memory-mapped signature scanning, entropy scoring, and real-time quarantine"
+                           Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- 3 Scan Profile Cards -->
+            <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,20">
+                <!-- Profile 1: Quick Scan -->
+                <Border Style="{StaticResource GlassCardStyle}" Margin="0,0,12,0" Padding="24">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Width="48" Height="48" Background="#18233C" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,16">
+                            <Path Data="{StaticResource IconZap}" Fill="{StaticResource BrushCyanAccent}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <TextBlock Grid.Row="1" Text="Quick Scan" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        
+                        <TextBlock Grid.Row="2" Text="Scans active user profiles, Downloads, Desktop, temporary staging folders, and memory-loaded binaries for fast triage."
+                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,16"/>
+
+                        <TextBlock Grid.Row="3" Text="ESTIMATED DURATION: ~30 SEC" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,16"/>
+
+                        <Button Grid.Row="4" Content="RUN QUICK SCAN" Command="{Binding StartQuickScanCommand}" Style="{StaticResource PrimaryButtonStyle}" Height="40"/>
+                    </Grid>
+                </Border>
+
+                <!-- Profile 2: Full System Scan -->
+                <Border Style="{StaticResource GlassCardStyle}" Margin="6,0,6,0" Padding="24">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Width="48" Height="48" Background="#132B25" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,16">
+                            <Path Data="{StaticResource IconShield}" Fill="{StaticResource BrushEmeraldSafe}" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <TextBlock Grid.Row="1" Text="Full System Scan" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        
+                        <TextBlock Grid.Row="2" Text="Exhaustive deep-sector inspection across all fixed storage volumes, system directories, program files, and compressed payloads."
+                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,16"/>
+
+                        <TextBlock Grid.Row="3" Text="ESTIMATED DURATION: ~5-15 MIN" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,16"/>
+
+                        <Button Grid.Row="4" Content="RUN FULL SCAN" Command="{Binding StartFullScanCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="40"/>
+                    </Grid>
+                </Border>
+
+                <!-- Profile 3: Custom Directory Scan -->
+                <Border Style="{StaticResource GlassCardStyle}" Margin="12,0,0,0" Padding="24">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Width="48" Height="48" Background="#261A35" CornerRadius="12" HorizontalAlignment="Left" Margin="0,0,0,16">
+                            <Path Data="{StaticResource IconSearch}" Fill="#A78BFA" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <TextBlock Grid.Row="1" Text="Custom Directory" Foreground="White" FontSize="18" FontWeight="Bold"/>
+                        
+                        <TextBlock Grid.Row="2" Text="Select any specific directory, flash drive, or downloaded package for focused heuristic evaluation and cryptographic validation."
+                                   Foreground="{StaticResource BrushTextMuted}" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,8,0,16"/>
+
+                        <TextBlock Grid.Row="3" Text="ESTIMATED DURATION: TARGET DEPENDENT" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,16"/>
+
+                        <Button Grid.Row="4" Content="CHOOSE FOLDER" Command="{Binding StartCustomScanCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="40"/>
+                    </Grid>
+                </Border>
+            </UniformGrid>
+
+            <!-- Drag & Drop Quick Notice -->
+            <Border Grid.Row="2" Background="{StaticResource BrushBgSurface}" CornerRadius="10" Padding="20,14" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Grid.Column="0" Data="{StaticResource IconFolder}" Fill="{StaticResource BrushCyanAccent}" Width="20" Height="20" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="Instant Drag &amp; Drop Scanning" Foreground="White" FontSize="12" FontWeight="Bold"/>
+                        <TextBlock Text="Drag and drop any file, folder, or zip archive directly onto the window at any time to run instant targeted analysis." Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ==================== 2. ACTIVE SCANNING VIEW ==================== -->
+        <Grid Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" Margin="32">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -162,7 +274,7 @@
             </Border>
         </Grid>
 
-        <!-- 2. SCAN SUMMARY VIEW (Appears on completion) -->
+        <!-- ==================== 3. SCAN SUMMARY VIEW ==================== -->
         <Grid Visibility="{Binding IsScanComplete, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
             <StackPanel HorizontalAlignment="Center">
                 <Border Width="64" Height="64" Background="#132B25" CornerRadius="32" Margin="0,0,0,16" HorizontalAlignment="Center">
@@ -188,8 +300,12 @@
                     </UniformGrid>
                 </Border>
 
-                <Button Content="RETURN TO DASHBOARD" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding DoneSummaryCommand}"
-                        Width="220" Height="42" Margin="0,28,0,0" HorizontalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,28,0,0">
+                    <Button Content="RUN ANOTHER SCAN" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding ResetToIdleCommand}"
+                            Width="190" Height="42" Margin="0,0,14,0"/>
+                    <Button Content="RETURN TO DASHBOARD" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding ReturnToDashboardCommand}"
+                            Width="210" Height="42"/>
+                </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>

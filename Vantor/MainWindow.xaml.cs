@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -12,6 +13,7 @@ namespace Vantor
     {
         private readonly MainViewModel _mainViewModel;
         private readonly VantorIpcClient _ipcClient;
+        private Process? _serviceProcess;
 
         public MainWindow()
         {
@@ -52,9 +54,40 @@ namespace Vantor
             }
 
             _ipcClient = new VantorIpcClient();
+            EnsureServiceRunning(serviceExe, workingDir);
+
             _mainViewModel = new MainViewModel(_ipcClient, backendExe, serviceExe, workingDir, quarantineDbPath);
 
             DataContext = _mainViewModel;
+        }
+
+        private async void EnsureServiceRunning(string serviceExe, string workingDir)
+        {
+            try
+            {
+                bool isAlive = await _ipcClient.PingAsync();
+                if (isAlive) return;
+
+                if (File.Exists(serviceExe))
+                {
+                    _serviceProcess = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = serviceExe,
+                            Arguments = "--console",
+                            WorkingDirectory = workingDir,
+                            CreateNoWindow = true,
+                            UseShellExecute = false
+                        }
+                    };
+                    _serviceProcess.Start();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[MainWindow] Could not spawn VantorService: {ex.Message}");
+            }
         }
 
         private static string FindFile(string filename, params string[] searchPaths)
@@ -92,6 +125,16 @@ namespace Vantor
         {
             _ipcClient.StopHeartbeat();
             _ipcClient.Dispose();
+
+            try
+            {
+                if (_serviceProcess != null && !_serviceProcess.HasExited)
+                {
+                    _serviceProcess.Kill();
+                }
+            }
+            catch { }
+
             Application.Current.Shutdown();
         }
 

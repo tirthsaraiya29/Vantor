@@ -11,10 +11,21 @@ namespace Vantor.ViewModels
     {
         private readonly IVantorIpcClient _ipcClient;
 
+        private static readonly SolidColorBrush AmberBrush = CreateFrozenBrush(Color.FromRgb(245, 158, 11));
+        private static readonly SolidColorBrush EmeraldBrush = CreateFrozenBrush(Color.FromRgb(16, 185, 129));
+        private static readonly SolidColorBrush CrimsonBrush = CreateFrozenBrush(Color.FromRgb(244, 63, 94));
+
+        private static SolidColorBrush CreateFrozenBrush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+
         private ViewModelBase _currentViewModel = null!;
         private bool _isEngineOnline;
         private string _engineStatusText = "Connecting...";
-        private SolidColorBrush _engineStatusColor = new(Color.FromRgb(245, 158, 11)); // Amber
+        private SolidColorBrush _engineStatusColor = AmberBrush;
 
         public DashboardViewModel DashboardVM { get; }
         public ScanCenterViewModel ScanCenterVM { get; }
@@ -122,12 +133,12 @@ namespace Vantor.ViewModels
             if (isConnected)
             {
                 EngineStatusText = "Real-Time Active";
-                EngineStatusColor = new SolidColorBrush(Color.FromRgb(16, 185, 129)); // Emerald
+                EngineStatusColor = EmeraldBrush;
             }
             else
             {
                 EngineStatusText = "Engine Disconnected";
-                EngineStatusColor = new SolidColorBrush(Color.FromRgb(244, 63, 94)); // Crimson
+                EngineStatusColor = CrimsonBrush;
             }
         }
     }

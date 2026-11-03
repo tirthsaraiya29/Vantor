@@ -41,10 +41,17 @@ namespace Vantor.Common
 
     public class VerdictToBrushConverter : IValueConverter
     {
-        private static readonly SolidColorBrush SafeBrush = new(Color.FromRgb(16, 185, 129));
-        private static readonly SolidColorBrush ThreatBrush = new(Color.FromRgb(244, 63, 94));
-        private static readonly SolidColorBrush WarningBrush = new(Color.FromRgb(245, 158, 11));
-        private static readonly SolidColorBrush NeutralBrush = new(Color.FromRgb(148, 163, 184));
+        private static readonly SolidColorBrush SafeBrush = CreateFrozenBrush(Color.FromRgb(16, 185, 129));
+        private static readonly SolidColorBrush ThreatBrush = CreateFrozenBrush(Color.FromRgb(244, 63, 94));
+        private static readonly SolidColorBrush WarningBrush = CreateFrozenBrush(Color.FromRgb(245, 158, 11));
+        private static readonly SolidColorBrush NeutralBrush = CreateFrozenBrush(Color.FromRgb(148, 163, 184));
+
+        private static SolidColorBrush CreateFrozenBrush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
 
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {

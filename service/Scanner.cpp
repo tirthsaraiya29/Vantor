@@ -648,11 +648,33 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
     if (scanType == "quick") {
         wchar_t userProfile[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROFILE, nullptr, 0, userProfile))) {
-            targets.push_back(std::wstring(userProfile) + L"\\Downloads");
-            targets.push_back(std::wstring(userProfile) + L"\\Desktop");
-            targets.push_back(std::wstring(userProfile) + L"\\Documents");
-            targets.push_back(std::wstring(userProfile) + L"\\AppData\\Local\\Temp");
+            std::wstring profileStr(userProfile);
+            if (profileStr.find(L"systemprofile") == std::wstring::npos) {
+                targets.push_back(profileStr + L"\\Downloads");
+                targets.push_back(profileStr + L"\\Desktop");
+                targets.push_back(profileStr + L"\\Documents");
+                targets.push_back(profileStr + L"\\AppData\\Local\\Temp");
+            }
         }
+
+        // Also enumerate C:\Users\* to find actual logged-in user profile folders
+        std::error_code ec;
+        fs::path usersDir = L"C:\\Users";
+        if (fs::exists(usersDir, ec)) {
+            for (const auto& entry : fs::directory_iterator(usersDir, fs::directory_options::skip_permission_denied, ec)) {
+                if (entry.is_directory(ec)) {
+                    std::wstring name = entry.path().filename().wstring();
+                    if (name != L"Public" && name != L"Default" && name != L"Default User" && name != L"All Users") {
+                        fs::path p = entry.path();
+                        if (fs::exists(p / L"Downloads", ec)) targets.push_back((p / L"Downloads").wstring());
+                        if (fs::exists(p / L"Desktop", ec)) targets.push_back((p / L"Desktop").wstring());
+                        if (fs::exists(p / L"Documents", ec)) targets.push_back((p / L"Documents").wstring());
+                        if (fs::exists(p / L"AppData\\Local\\Temp", ec)) targets.push_back((p / L"AppData\\Local\\Temp").wstring());
+                    }
+                }
+            }
+        }
+        targets.push_back(L"C:\\Windows\\Temp");
     } else if (scanType == "full") {
         DWORD drives = GetLogicalDrives();
         for (int i = 0; i < 26; ++i) {
@@ -667,9 +689,15 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
         targets.push_back(Utf8ToUtf16(customPath));
     }
 
-    for (const auto& target : targets) {
-        if (cancelRequested_) break;
-        TraverseDirectory(target, filesScanned, threatsFound, estimatedFiles, progressCb);
+    try {
+        for (const auto& target : targets) {
+            if (cancelRequested_) break;
+            TraverseDirectory(target, filesScanned, threatsFound, estimatedFiles, progressCb);
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("Scanner", "Exception during ScanWorker execution: " + std::string(e.what()));
+    } catch (...) {
+        LOG_ERROR("Scanner", "Unknown exception during ScanWorker execution");
     }
 
     isScanning_ = false;
@@ -689,52 +717,76 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
 }
 
 void Scanner::TraverseDirectory(const std::wstring& root, int& scanned, int& threats, int totalEst, ProgressCallback progressCb) {
-    std::error_code ec;
-    if (!fs::exists(root, ec)) return;
+    try {
+        std::error_code ec;
+        if (!fs::exists(root, ec)) return;
 
-    if (fs::is_regular_file(root, ec)) {
-        if (cancelRequested_) return;
-        auto res = ScanSingleFile(Utf16ToUtf8(root), activeSessionId_);
-        scanned++;
-        if (res.verdict == ScanVerdict::Malicious) threats++;
-
-        if (progressCb) {
-            ScanProgressInfo info;
-            info.sessionId = activeSessionId_;
-            info.filesScanned = scanned;
-            info.threatsDetected = threats;
-            info.currentFile = Utf16ToUtf8(root);
-            info.percentComplete = totalEst > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / totalEst) * 100.0f) : 50.0f;
-            progressCb(info);
-        }
-        return;
-    }
-
-    for (const auto& entry : fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec)) {
-        if (cancelRequested_) break;
-        if (entry.is_regular_file(ec)) {
-            std::string pathStr = Utf16ToUtf8(entry.path().wstring());
-            auto res = ScanSingleFile(pathStr, activeSessionId_);
+        if (fs::is_regular_file(root, ec)) {
+            if (cancelRequested_) return;
+            auto res = ScanSingleFile(Utf16ToUtf8(root), activeSessionId_);
             scanned++;
             if (res.verdict == ScanVerdict::Malicious) threats++;
 
-            if (progressCb && (scanned % 5 == 0 || res.verdict == ScanVerdict::Malicious)) {
+            if (progressCb) {
                 ScanProgressInfo info;
                 info.sessionId = activeSessionId_;
                 info.filesScanned = scanned;
                 info.threatsDetected = threats;
-                info.currentFile = pathStr;
+                info.currentFile = Utf16ToUtf8(root);
                 info.percentComplete = totalEst > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / totalEst) * 100.0f) : 50.0f;
                 progressCb(info);
             }
+            return;
         }
+
+        auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+        auto end = fs::recursive_directory_iterator();
+        while (!ec && it != end) {
+            if (cancelRequested_) break;
+
+            try {
+                const auto& entry = *it;
+                if (entry.is_regular_file(ec)) {
+                    std::string pathStr = Utf16ToUtf8(entry.path().wstring());
+                    auto res = ScanSingleFile(pathStr, activeSessionId_);
+                    scanned++;
+                    if (res.verdict == ScanVerdict::Malicious) threats++;
+
+                    if (progressCb && (scanned <= 10 || scanned % 5 == 0 || res.verdict == ScanVerdict::Malicious)) {
+                        ScanProgressInfo info;
+                        info.sessionId = activeSessionId_;
+                        info.filesScanned = scanned;
+                        info.threatsDetected = threats;
+                        info.currentFile = pathStr;
+                        info.percentComplete = totalEst > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / totalEst) * 100.0f) : 50.0f;
+                        progressCb(info);
+                    }
+                }
+            } catch (...) {
+                // Ignore per-entry access issues
+            }
+
+            it.increment(ec);
+            if (ec) {
+                ec.clear();
+                it.pop();
+            }
+        }
+    } catch (const std::exception& e) {
+        LOG_WARN("Scanner", "Exception during directory traversal of " + Utf16ToUtf8(root) + ": " + e.what());
+    } catch (...) {
+        LOG_WARN("Scanner", "Unknown exception during directory traversal of " + Utf16ToUtf8(root));
     }
 }
 
 int Scanner::EstimateFileCount(const std::string& scanType, const std::string& customPath) {
-    (void)customPath;
     if (scanType == "quick") return 2500;
     if (scanType == "full") return 50000;
+    if (!customPath.empty()) {
+        std::error_code ec;
+        if (fs::is_regular_file(fs::path(Utf8ToUtf16(customPath)), ec)) return 1;
+        return 500;
+    }
     return 1000;
 }
 

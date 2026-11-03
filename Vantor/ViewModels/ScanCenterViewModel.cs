@@ -36,14 +36,28 @@ namespace Vantor.ViewModels
         public bool IsScanning
         {
             get => _isScanning;
-            set => SetProperty(ref _isScanning, value);
+            set
+            {
+                if (SetProperty(ref _isScanning, value))
+                {
+                    OnPropertyChanged(nameof(IsIdle));
+                }
+            }
         }
 
         public bool IsScanComplete
         {
             get => _isScanComplete;
-            set => SetProperty(ref _isScanComplete, value);
+            set
+            {
+                if (SetProperty(ref _isScanComplete, value))
+                {
+                    OnPropertyChanged(nameof(IsIdle));
+                }
+            }
         }
+
+        public bool IsIdle => !IsScanning && !IsScanComplete;
 
         public string ScanMode
         {
@@ -99,8 +113,13 @@ namespace Vantor.ViewModels
             set => SetProperty(ref _elapsedText, value);
         }
 
+        public ICommand StartQuickScanCommand { get; }
+        public ICommand StartFullScanCommand { get; }
+        public ICommand StartCustomScanCommand { get; }
         public ICommand AbortScanCommand { get; }
         public ICommand DoneSummaryCommand { get; }
+        public ICommand ResetToIdleCommand { get; }
+        public ICommand ReturnToDashboardCommand { get; }
 
         public ScanCenterViewModel(IVantorIpcClient ipcClient, Action returnToDashboardAction)
         {
@@ -110,16 +129,31 @@ namespace Vantor.ViewModels
             _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _pollTimer.Tick += OnPollTimerTick;
 
+            StartQuickScanCommand = new RelayCommand(() => StartScan("quick", ""));
+            StartFullScanCommand = new RelayCommand(() => StartScan("full", ""));
+            StartCustomScanCommand = new RelayCommand(() =>
+            {
+                var dlg = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Select Directory for Deep Security Scan"
+                };
+                if (dlg.ShowDialog() == true && !string.IsNullOrEmpty(dlg.FolderName))
+                {
+                    StartScan("custom", dlg.FolderName);
+                }
+            });
+
             AbortScanCommand = new AsyncRelayCommand(async () =>
             {
                 await _ipcClient.CancelScanAsync();
-                StopScanSession();
-                _returnToDashboardAction();
+                ResetToIdle();
             });
 
-            DoneSummaryCommand = new RelayCommand(() =>
+            DoneSummaryCommand = new RelayCommand(ResetToIdle);
+            ResetToIdleCommand = new RelayCommand(ResetToIdle);
+            ReturnToDashboardCommand = new RelayCommand(() =>
             {
-                IsScanComplete = false;
+                ResetToIdle();
                 _returnToDashboardAction();
             });
         }
@@ -166,6 +200,13 @@ namespace Vantor.ViewModels
                     string currentFile = root.GetProperty("current_file").GetString() ?? "";
                     double percent = root.GetProperty("percent").GetDouble();
                     bool isComplete = root.GetProperty("is_complete").GetBoolean();
+                    bool isEngineScanning = root.TryGetProperty("is_scanning", out var isScanProp) && isScanProp.GetBoolean();
+
+                    // Guard against stale complete state on very first tick
+                    if (isComplete && scanned == 0 && _stopwatch.ElapsedMilliseconds < 800)
+                    {
+                        return;
+                    }
 
                     int newScanned = scanned - _lastScannedForThroughput;
                     _lastScannedForThroughput = scanned;
@@ -188,7 +229,7 @@ namespace Vantor.ViewModels
                         });
                     }
 
-                    if (isComplete)
+                    if (isComplete || (!isEngineScanning && scanned > 0 && _stopwatch.ElapsedMilliseconds > 1000))
                     {
                         FinishScan();
                     }
@@ -210,6 +251,7 @@ namespace Vantor.ViewModels
         {
             StopScanSession();
             SafeFilesCount = Math.Max(0, FilesScannedCount - ThreatsDetectedCount);
+            IsScanning = false;
             IsScanComplete = true;
 
             if (ThreatsDetectedCount > 0)
@@ -222,11 +264,26 @@ namespace Vantor.ViewModels
             }
         }
 
+        private void ResetToIdle()
+        {
+            StopScanSession();
+            IsScanning = false;
+            IsScanComplete = false;
+            ProgressPercent = 0;
+            CurrentScanningPath = "";
+            FilesScannedCount = 0;
+            ThreatsDetectedCount = 0;
+            FilesQuarantinedCount = 0;
+            SafeFilesCount = 0;
+            ThroughputText = "0 files/s";
+            ElapsedText = "00:00";
+            LiveScanFeed.Clear();
+        }
+
         private void StopScanSession()
         {
             _pollTimer.Stop();
             _stopwatch.Stop();
-            IsScanning = false;
         }
     }
 }

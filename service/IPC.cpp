@@ -51,6 +51,17 @@ std::string ServiceIPC::HandleRequest(const std::string& requestJson) {
             std::string type = req.value("type", "quick");
             std::string path = req.value("path", "");
 
+            {
+                std::lock_guard<std::mutex> lock(g_progressMutex);
+                g_lastProgress = scan::ScanProgressInfo();
+                g_lastProgress.sessionId = "INIT";
+                g_lastProgress.filesScanned = 0;
+                g_lastProgress.threatsDetected = 0;
+                g_lastProgress.currentFile = "Initializing scan pipeline...";
+                g_lastProgress.percentComplete = 0.0f;
+                g_lastProgress.isComplete = false;
+            }
+
             bool started = scan::Scanner::Instance().StartScan(type, path, [](const scan::ScanProgressInfo& info) {
                 std::lock_guard<std::mutex> lock(g_progressMutex);
                 g_lastProgress = info;

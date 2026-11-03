@@ -11,10 +11,14 @@ namespace Vantor.Views
             InitializeComponent();
             Loaded += (s, e) =>
             {
-                if (FindResource("RadarSweepStoryboard") is Storyboard sb)
+                try
                 {
-                    sb.Begin(this, true);
+                    if (FindResource("RadarSweepStoryboard") is Storyboard sb)
+                    {
+                        sb.Begin(this, true);
+                    }
                 }
+                catch { }
             };
         }
     }
