@@ -66,6 +66,7 @@ private:
     std::string activeSessionId_;
 
     std::mutex safeDbMutex_;
+    std::mutex quarantineMutex_;
     std::unordered_set<std::string> inMemorySafeCache_;
 };
 

@@ -33,6 +33,8 @@ test_*.idx
 **/obj/
 **/TestResults/
 *.dll
+!common/sqlite3.dll
+!sqlite3.dll
 *.exe
 *.pdb
 *.deps.json
@@ -52,6 +54,7 @@ test_*.idx
 *.ilk
 *.exp
 *.lib
+!common/sqlite3.lib
 *.pch
 *.obj
 *.idb

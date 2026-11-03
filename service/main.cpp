@@ -61,17 +61,20 @@ DWORD WINAPI HandlerEx(DWORD dwControl, DWORD dwEventType, LPVOID lpEventData, L
 void StartServiceEngines() {
     LOG_INFO("Service", "Starting Vantor Service Core Engines...");
 
-    // 1. Load Encrypted Configuration
-    config::ConfigManager::Instance().Load();
+    std::wstring exeDir = GetExecutableDirectory();
+    std::string appDir = Utf16ToUtf8(exeDir);
 
-    // 2. Initialize and start Anti-Tamper
-    antitamper::AntiTamper::Instance().Initialize();
+    // 1. Load Encrypted Configuration from application directory
+    config::ConfigManager::Instance().Load(appDir + "/config.json");
+
+    // 2. Initialize and start Anti-Tamper with application directory
+    antitamper::AntiTamper::Instance().Initialize(exeDir);
     if (config::ConfigManager::Instance().GetConfig().antiTamperEnabled) {
         antitamper::AntiTamper::Instance().Start();
     }
 
-    // 3. Initialize Scanner & Quarantine
-    scan::Scanner::Instance().Initialize();
+    // 3. Initialize Scanner & Quarantine with application directory
+    scan::Scanner::Instance().Initialize(appDir);
 
     // 4. Start Named Pipe IPC Server
     ServiceIPC::Instance().Start();

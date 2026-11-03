@@ -33,9 +33,15 @@ jobs:
 
       - name: Copy Runtime Dependencies
         run: |
-          Copy-Item VantorBackend\sqlite3.dll build\service\Release\ -Force
-          Copy-Item VantorBackend\sqlite3.dll build\backend\Release\ -Force
-          Copy-Item VantorBackend\sqlite3.dll build\backend\tests\Release\ -Force
+          if (Test-Path common\sqlite3.dll) {
+            Copy-Item common\sqlite3.dll build\service\Release\ -Force
+            Copy-Item common\sqlite3.dll build\backend\Release\ -Force
+            Copy-Item common\sqlite3.dll build\backend\tests\Release\ -Force
+          } elseif (Test-Path VantorBackend\sqlite3.dll) {
+            Copy-Item VantorBackend\sqlite3.dll build\service\Release\ -Force
+            Copy-Item VantorBackend\sqlite3.dll build\backend\Release\ -Force
+            Copy-Item VantorBackend\sqlite3.dll build\backend\tests\Release\ -Force
+          }
 
       - name: Run Security & Integrity Unit Tests
         run: |
@@ -81,5 +87,5 @@ jobs:
             build/service/Release/VantorService.exe
             build/backend/Release/VantorBackend.exe
             build/backend/tests/Release/VantorTests.exe
-            VantorBackend/sqlite3.dll
+            common/sqlite3.dll
             proto/vantor.proto

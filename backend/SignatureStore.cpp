@@ -71,8 +71,9 @@ void SignatureStore::Close() {
 }
 
 void SignatureStore::BloomAdd(const uint8_t* hash32) {
-    uint64_t h1 = *reinterpret_cast<const uint64_t*>(hash32);
-    uint64_t h2 = *reinterpret_cast<const uint64_t*>(hash32 + 8);
+    uint64_t h1 = 0, h2 = 0;
+    memcpy(&h1, hash32, sizeof(h1));
+    memcpy(&h2, hash32 + 8, sizeof(h2));
 
     uint64_t totalBits = BLOOM_FILTER_BYTES * 8;
 
@@ -84,8 +85,9 @@ void SignatureStore::BloomAdd(const uint8_t* hash32) {
 }
 
 bool SignatureStore::BloomMayContain(const uint8_t* hash32) const {
-    uint64_t h1 = *reinterpret_cast<const uint64_t*>(hash32);
-    uint64_t h2 = *reinterpret_cast<const uint64_t*>(hash32 + 8);
+    uint64_t h1 = 0, h2 = 0;
+    memcpy(&h1, hash32, sizeof(h1));
+    memcpy(&h2, hash32 + 8, sizeof(h2));
 
     uint64_t totalBits = BLOOM_FILTER_BYTES * 8;
 
@@ -120,7 +122,7 @@ bool SignatureStore::OpenMemoryMap() {
     }
 
     LARGE_INTEGER liSize;
-    if (!GetFileSizeEx(hFile_, &liSize) || liSize.QuadPart < sizeof(IndexHeader)) {
+    if (!GetFileSizeEx(hFile_, &liSize) || liSize.QuadPart < static_cast<LONGLONG>(sizeof(IndexHeader))) {
         CloseHandle(hFile_);
         hFile_ = INVALID_HANDLE_VALUE;
         return false;
@@ -144,7 +146,17 @@ bool SignatureStore::OpenMemoryMap() {
     }
 
     pHeader_ = reinterpret_cast<const IndexHeader*>(pMappedView_);
-    if (pHeader_->magic != SIGNATURE_INDEX_MAGIC || pHeader_->version != SIGNATURE_INDEX_VERSION) {
+    if (pHeader_->magic != SIGNATURE_INDEX_MAGIC ||
+        pHeader_->version != SIGNATURE_INDEX_VERSION ||
+        pHeader_->bloomFilterBytes != BLOOM_FILTER_BYTES) {
+        CloseMemoryMap();
+        return false;
+    }
+
+    // Strict bounds validation: verify physical file size contains all declared signatures
+    uint64_t expectedMinSize = sizeof(IndexHeader) + (pHeader_->totalSignatures * 32ULL);
+    if (static_cast<uint64_t>(liSize.QuadPart) < expectedMinSize) {
+        LOG_WARN("SignatureStore", "Index file is truncated or corrupted compared to signature count header.");
         CloseMemoryMap();
         return false;
     }
@@ -173,10 +185,11 @@ void SignatureStore::CloseMemoryMap() {
 }
 
 bool SignatureStore::Contains(const std::string& sha256Hex) {
-    if (sha256Hex.length() != 64) return false;
+    std::string lowerHex = ToLower(sha256Hex);
+    if (lowerHex.length() != 64) return false;
 
     std::vector<uint8_t> hashBytes;
-    if (!crypto::HexToBytes(sha256Hex, hashBytes) || hashBytes.size() != 32) {
+    if (!crypto::HexToBytes(lowerHex, hashBytes) || hashBytes.size() != 32) {
         return false;
     }
 
@@ -214,7 +227,7 @@ bool SignatureStore::Contains(const std::string& sha256Hex) {
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT 1 FROM malware_hashes WHERE hash = ? LIMIT 1;";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, sha256Hex.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 1, lowerHex.c_str(), -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) == SQLITE_ROW) {
                 found = true;
             }

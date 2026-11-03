@@ -32,7 +32,7 @@ public:
     bool IsRunning() const { return running_; }
 
     // RPC Handler implementations
-    std::string ProcessRpc(const std::string& method, const std::string& requestPayloadJson);
+    std::string ProcessRpc(const std::string& method, const std::string& requestPayloadJson, const std::string& clientToken = "");
 
 private:
     void ServerWorker();

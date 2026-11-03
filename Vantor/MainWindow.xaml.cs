@@ -36,6 +36,7 @@ namespace Vantor
         private int _threatsCount = 0;
         private int _quarantinedCount = 0;
         private bool _isScanning = false;
+        private int _consecutiveIpcFailures = 0;
 
         public MainWindow()
         {
@@ -280,6 +281,7 @@ namespace Vantor
             _totalScanned = 0;
             _threatsCount = 0;
             _quarantinedCount = 0;
+            _consecutiveIpcFailures = 0;
 
             HideAllViews();
             ScanView.Visibility = Visibility.Visible;
@@ -338,6 +340,7 @@ namespace Vantor
                     _totalScanned = scanned;
                     _threatsCount = threats;
                     _quarantinedCount = threats;
+                    _consecutiveIpcFailures = 0;
 
                     txtScanPercent.Text = $"{(int)percent}%";
                     lblScannedCount.Text = scanned.ToString();
@@ -358,15 +361,17 @@ namespace Vantor
                 catch { }
             }
 
-            // Fallback progress increment if running via standalone backend
-            _totalScanned += 7;
-            int simulatedPercent = Math.Min(99, _totalScanned / 30);
-            txtScanPercent.Text = $"{simulatedPercent}%";
-            lblScannedCount.Text = _totalScanned.ToString();
-
-            if (_totalScanned > 3000)
+            _consecutiveIpcFailures++;
+            if (_consecutiveIpcFailures > 20) // ~3 seconds of lost IPC contact
             {
-                FinishScan();
+                _scanTimer.Stop();
+                _isScanning = false;
+                ((Storyboard)FindResource("RotateScanner")).Stop();
+                txtScanPath.Text = "Scanner Service Disconnected / Engine Offline";
+                txtScanPercent.Text = "Error";
+                MessageBox.Show("Cannot communicate with Vantor Windows Service via Named Pipe. Engine appears offline.", "Vantor Scanner Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                HideAllViews();
+                DashboardView.Visibility = Visibility.Visible;
             }
         }
 

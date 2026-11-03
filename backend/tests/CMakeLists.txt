@@ -10,9 +10,13 @@ set(TEST_SOURCES
     test_zipbomb.cpp
     test_antitamper.cpp
     test_ipc.cpp
+    test_crypto.cpp
+    test_scanner.cpp
     ../SignatureStore.cpp
     ../ZipBombDetector.cpp
     ../../service/AntiTamper.cpp
+    ../../service/Scanner.cpp
+    ../../service/ConfigManager.cpp
 )
 
 add_executable(VantorTests ${TEST_SOURCES} TestHarness.h)

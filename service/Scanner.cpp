@@ -1,5 +1,6 @@
 #include "Scanner.h"
 #include "ConfigManager.h"
+#include "../backend/SignatureStore.h"
 #include "../common/Crypto.h"
 #include "../common/Logger.h"
 #include "../common/sqlite3.h"
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <thread>
 #include <cmath>
+#include <algorithm>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "shell32.lib")
@@ -39,8 +41,8 @@ static double CalculateBufferEntropy(const uint8_t* data, size_t size) {
 }
 
 Scanner::Scanner() {
-    quarantineDir_ = "quarantine";
-    baseDir_ = ".";
+    baseDir_ = Utf16ToUtf8(GetExecutableDirectory());
+    quarantineDir_ = baseDir_ + "/quarantine";
 }
 
 Scanner::~Scanner() {
@@ -50,6 +52,8 @@ Scanner::~Scanner() {
 bool Scanner::Initialize(const std::string& baseDir) {
     if (!baseDir.empty()) {
         baseDir_ = baseDir;
+    } else {
+        baseDir_ = Utf16ToUtf8(GetExecutableDirectory());
     }
     quarantineDir_ = baseDir_ + "/quarantine";
 
@@ -75,7 +79,14 @@ bool Scanner::Initialize(const std::string& baseDir) {
         sqlite3_close(db);
     }
 
-    LOG_INFO("Scanner", "Scanner engine initialized. Quarantine storage ready.");
+    // Initialize SignatureStore using absolute paths in baseDir if present
+    std::string sigDbPath = baseDir_ + "/signatures.db";
+    std::string sigIdxPath = baseDir_ + "/signatures.idx";
+    if (baseDir.empty() || fs::exists(sigDbPath) || fs::exists(sigIdxPath)) {
+        backend::SignatureStore::Instance().Initialize(sigDbPath, sigIdxPath);
+    }
+
+    LOG_INFO("Scanner", "Scanner engine initialized. Quarantine & Signature storage ready.");
     return true;
 }
 
@@ -106,7 +117,6 @@ bool Scanner::VerifyAuthenticode(const std::wstring& filePath) {
 
 double Scanner::CalculateHeuristicScore(const std::string& filePath, const std::vector<uint8_t>& peBuf) {
     int points = 0;
-    std::string lowerPath = ToLower(filePath);
 
     // 1. Digital Signature Filter (Strongest FP mitigation)
     if (VerifyAuthenticode(Utf8ToUtf16(filePath))) {
@@ -115,74 +125,83 @@ double Scanner::CalculateHeuristicScore(const std::string& filePath, const std::
         points += 20; // Unsigned executable
     }
 
-    // 2. Contextual Path Risks
+    // 2. Contextual Path Risks (only in user temp, downloads, appdata)
+    std::string lowerPath = ToLower(NormalizePathSeparators(filePath));
     if (lowerPath.find("\\temp\\") != std::string::npos ||
         lowerPath.find("\\appdata\\") != std::string::npos ||
         lowerPath.find("\\downloads\\") != std::string::npos) {
-        points += 20;
+        points += 15;
     }
 
-    // 3. Double Extension checks (e.g., malware.pdf.exe)
-    if (lowerPath.find(".pdf.exe") != std::string::npos ||
-        lowerPath.find(".docx.exe") != std::string::npos ||
-        lowerPath.find(".txt.exe") != std::string::npos ||
-        lowerPath.find(".jpg.exe") != std::string::npos) {
-        points += 50;
+    // 3. Double Extension checks on filename ONLY (e.g., malware.pdf.exe)
+    std::string filename = ToLower(fs::path(filePath).filename().string());
+    if (filename.ends_with(".exe") || filename.ends_with(".scr") || filename.ends_with(".com")) {
+        if (filename.find(".pdf.") != std::string::npos ||
+            filename.find(".docx.") != std::string::npos ||
+            filename.find(".txt.") != std::string::npos ||
+            filename.find(".jpg.") != std::string::npos ||
+            filename.find(".xlsx.") != std::string::npos) {
+            points += 50;
+        }
     }
 
     // 4. PE Header structural parsing
     if (peBuf.size() >= sizeof(IMAGE_DOS_HEADER)) {
         auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(peBuf.data());
         if (dos->e_magic == IMAGE_DOS_SIGNATURE && dos->e_lfanew > 0 &&
-            static_cast<size_t>(dos->e_lfanew) + sizeof(IMAGE_NT_HEADERS) <= peBuf.size()) {
+            static_cast<size_t>(dos->e_lfanew) + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) <= peBuf.size()) {
 
-            auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(peBuf.data() + dos->e_lfanew);
-            if (nt->Signature == IMAGE_NT_SIGNATURE) {
-                // Section count anomaly
-                if (nt->FileHeader.NumberOfSections > 12) points += 15;
-                if (nt->FileHeader.NumberOfSections == 0) points += 35;
+            const uint8_t* ntBase = peBuf.data() + dos->e_lfanew;
+            uint32_t ntSig = *reinterpret_cast<const uint32_t*>(ntBase);
+            if (ntSig == IMAGE_NT_SIGNATURE) {
+                auto* fileHdr = reinterpret_cast<const IMAGE_FILE_HEADER*>(ntBase + sizeof(DWORD));
+                WORD numSections = fileHdr->NumberOfSections;
+                WORD sizeOfOptHdr = fileHdr->SizeOfOptionalHeader;
 
-                // Check sections
-                auto* section = IMAGE_FIRST_SECTION(nt);
+                if (numSections > 12) points += 15;
+                if (numSections == 0) points += 35;
+
+                size_t optHdrOffset = static_cast<size_t>(dos->e_lfanew) + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER);
+                size_t sectionHdrOffset = optHdrOffset + sizeOfOptHdr;
+
                 bool hasWxSection = false;
-                double maxEntropy = 0.0;
+                if (sectionHdrOffset <= peBuf.size()) {
+                    for (WORD i = 0; i < numSections; ++i) {
+                        size_t curOffset = sectionHdrOffset + (i * sizeof(IMAGE_SECTION_HEADER));
+                        if (curOffset + sizeof(IMAGE_SECTION_HEADER) > peBuf.size()) break;
 
-                for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i) {
-                    if (reinterpret_cast<const uint8_t*>(&section[i]) + sizeof(IMAGE_SECTION_HEADER) > peBuf.data() + peBuf.size())
-                        break;
+                        auto* sec = reinterpret_cast<const IMAGE_SECTION_HEADER*>(peBuf.data() + curOffset);
 
-                    // W^X Violation: Section has both Write and Execute permissions
-                    if ((section[i].Characteristics & IMAGE_SCN_MEM_WRITE) &&
-                        (section[i].Characteristics & IMAGE_SCN_MEM_EXECUTE)) {
-                        hasWxSection = true;
-                    }
+                        if ((sec->Characteristics & IMAGE_SCN_MEM_WRITE) &&
+                            (sec->Characteristics & IMAGE_SCN_MEM_EXECUTE)) {
+                            hasWxSection = true;
+                        }
 
-                    // Suspicious packer section names
-                    const char* secName = reinterpret_cast<const char*>(section[i].Name);
-                    if (strncmp(secName, ".upx", 4) == 0 ||
-                        strncmp(secName, ".aspack", 7) == 0 ||
-                        strncmp(secName, ".vmp", 4) == 0 ||
-                        strncmp(secName, ".themida", 8) == 0) {
-                        points += 30;
+                        char secName[9] = { 0 };
+                        memcpy(secName, sec->Name, 8);
+                        std::string lowerSec = ToLower(secName);
+
+                        if (lowerSec.rfind(".upx", 0) == 0 ||
+                            lowerSec.rfind(".aspack", 0) == 0 ||
+                            lowerSec.rfind(".vmp", 0) == 0 ||
+                            lowerSec.rfind(".themida", 0) == 0) {
+                            points += 30;
+                        }
                     }
                 }
 
-                if (hasWxSection) points += 40; // Shellcode stub / unpacked malware hallmark
+                if (hasWxSection) points += 40;
 
-                // Buffer entropy
-                maxEntropy = CalculateBufferEntropy(peBuf.data(), peBuf.size());
-                if (maxEntropy > 7.2) {
-                    points += 25; // Heavily encrypted or packed payload
+                double maxEntropy = CalculateBufferEntropy(peBuf.data(), peBuf.size());
+                if (maxEntropy > 7.4) {
+                    points += 25;
                 }
             }
         }
     }
 
-    // Clamp score to 0.0 - 1.0
     double score = static_cast<double>(points) / 100.0;
-    if (score < 0.0) score = 0.0;
-    if (score > 1.0) score = 1.0;
-    return score;
+    return std::clamp(score, 0.0, 1.0);
 }
 
 ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::string& sessionId) {
@@ -216,20 +235,10 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
         }
     }
 
-    // 3. Signature Lookup
-    sqlite3* db = nullptr;
-    if (sqlite3_open_v2("signatures.db", &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
-        sqlite3_stmt* stmt = nullptr;
-        const char* sql = "SELECT 1 FROM malware_hashes WHERE hash = ? LIMIT 1;";
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, result.sha256.c_str(), -1, SQLITE_STATIC);
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                result.signatureHit = true;
-                result.threatDescription = "Trojan.Win32.KnownSignature";
-            }
-            sqlite3_finalize(stmt);
-        }
-        sqlite3_close(db);
+    // 3. High-Speed Signature Lookup via Bloom Filter & Memory-Mapped Index (< 1 microsecond)
+    if (backend::SignatureStore::Instance().Contains(result.sha256)) {
+        result.signatureHit = true;
+        result.threatDescription = "Trojan.Win32.KnownSignature";
     }
 
     // 4. Read initial 64 KB for PE header inspection
@@ -269,12 +278,31 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
 
 bool Scanner::QuarantineFile(const std::string& filePath, const std::string& sessionId,
                              const std::string& sha256, const std::string& sha512) {
-    if (!fs::exists(filePath)) return false;
+    std::lock_guard<std::mutex> lock(quarantineMutex_);
+
+    std::error_code ec;
+    if (!fs::exists(filePath, ec) || !fs::is_regular_file(filePath, ec)) return false;
+
+    uint64_t fileSize = fs::file_size(filePath, ec);
+    if (ec) return false;
+
+    // Safety limit: 512 MB ceiling for single-file quarantine to prevent unbounded RAM usage
+    constexpr uint64_t MAX_QUARANTINE_BYTES = 512ULL * 1024ULL * 1024ULL;
+    if (fileSize > MAX_QUARANTINE_BYTES) {
+        LOG_WARN("Scanner", "File too large for memory quarantine (" + std::to_string(fileSize) + " bytes): " + filePath);
+        return false;
+    }
 
     // 1. Read plaintext file data
     std::ifstream in(filePath, std::ios::binary);
     if (!in) return false;
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), {});
+    std::vector<uint8_t> data(static_cast<size_t>(fileSize));
+    if (fileSize > 0) {
+        in.read(reinterpret_cast<char*>(data.data()), fileSize);
+        if (static_cast<uint64_t>(in.gcount()) != fileSize) {
+            return false;
+        }
+    }
     in.close();
 
     // 2. Load or create DPAPI master key
@@ -283,66 +311,116 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
 
     if (fs::exists(keyPath)) {
         std::ifstream keyIn(keyPath, std::ios::binary);
+        if (!keyIn) return false;
         std::vector<uint8_t> encKey((std::istreambuf_iterator<char>(keyIn)), {});
-        crypto::DPAPIUnprotect(encKey, key);
+        keyIn.close();
+        if (!crypto::DPAPIUnprotect(encKey, key) || key.size() != 32) {
+            LOG_ERROR("Scanner", "Failed to unprotect quarantine master key.");
+            return false;
+        }
     } else {
         crypto::GenerateRandomBytes(key.data(), 32);
         std::vector<uint8_t> encKey;
-        crypto::DPAPIProtect(key, encKey, true);
+        if (!crypto::DPAPIProtect(key, encKey, true)) {
+            LOG_ERROR("Scanner", "Failed to DPAPI protect new quarantine master key.");
+            return false;
+        }
         std::ofstream keyOut(keyPath, std::ios::binary);
+        if (!keyOut) return false;
         keyOut.write(reinterpret_cast<const char*>(encKey.data()), encKey.size());
+        keyOut.close();
     }
 
     // 3. Encrypt via AES-256-GCM
     std::vector<uint8_t> ciphertext, iv, tag;
-    if (!crypto::AES256GCMEncrypt(data, key, ciphertext, iv, tag)) {
+    bool encOk = crypto::AES256GCMEncrypt(data, key, ciphertext, iv, tag);
+    SecureZeroMemory(key.data(), key.size());
+    if (!encOk) {
+        LOG_ERROR("Scanner", "AES256GCMEncrypt failed during quarantine.");
         return false;
     }
 
-    // 4. Save to quarantine directory
+    // 4. Save to quarantine directory with temporary file
     fs::path originalPath(filePath);
     std::string encName = originalPath.filename().string() + "_" + sha256.substr(0, 8) + ".enc";
     fs::path dstEnc = fs::path(quarantineDir_) / encName;
+    fs::path dstTmp = fs::path(quarantineDir_) / (encName + ".tmp");
 
-    std::ofstream out(dstEnc, std::ios::binary);
+    std::ofstream out(dstTmp, std::ios::binary);
     if (!out) return false;
     out.write(reinterpret_cast<const char*>(iv.data()), iv.size());
     out.write(reinterpret_cast<const char*>(tag.data()), tag.size());
-    out.write(reinterpret_cast<const char*>(ciphertext.data()), ciphertext.size());
+    if (!ciphertext.empty()) {
+        out.write(reinterpret_cast<const char*>(ciphertext.data()), ciphertext.size());
+    }
     out.close();
 
-    // 5. Record metadata in SQLite
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
-    if (sqlite3_open(dbPath.c_str(), &db) == SQLITE_OK) {
-        const char* sql = "INSERT INTO quarantined_files "
-                          "(timestamp, scan_id, original_path, encrypted_filename, sha256, sha512, threat_name, file_size) "
-                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            std::string ts = NowUtcIso8601();
-            sqlite3_bind_text(stmt, 1, ts.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 2, sessionId.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 4, encName.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 5, sha256.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 6, sha512.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 7, "MaliciousPayload", -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int64(stmt, 8, static_cast<sqlite3_int64>(data.size()));
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
-        }
-        sqlite3_close(db);
+    // Verify temp file exists and has correct size
+    uint64_t expectedEncSize = iv.size() + tag.size() + ciphertext.size();
+    if (fs::file_size(dstTmp, ec) != expectedEncSize) {
+        fs::remove(dstTmp, ec);
+        return false;
     }
 
-    // 6. Delete original file
-    std::error_code ec;
+    // 5. Transactional insert into SQLite
+    sqlite3* db = nullptr;
+    std::string dbPath = quarantineDir_ + "/quarantine.db";
+    if (sqlite3_open(dbPath.c_str(), &db) != SQLITE_OK) {
+        fs::remove(dstTmp, ec);
+        return false;
+    }
+
+    bool dbSuccess = false;
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    const char* sql = "INSERT INTO quarantined_files "
+                      "(timestamp, scan_id, original_path, encrypted_filename, sha256, sha512, threat_name, file_size) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string ts = NowUtcIso8601();
+        sqlite3_bind_text(stmt, 1, ts.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, sessionId.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, encName.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, sha256.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 6, sha512.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 7, "MaliciousPayload", -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 8, static_cast<sqlite3_int64>(data.size()));
+        if (sqlite3_step(stmt) == SQLITE_DONE) {
+            dbSuccess = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (dbSuccess) {
+        sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+    } else {
+        sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+    }
+    sqlite3_close(db);
+
+    if (!dbSuccess) {
+        fs::remove(dstTmp, ec);
+        LOG_ERROR("Scanner", "Failed to commit quarantine record to database for: " + filePath);
+        return false;
+    }
+
+    // Atomic move temp to final .enc
+    fs::rename(dstTmp, dstEnc, ec);
+    if (ec) {
+        fs::copy_file(dstTmp, dstEnc, fs::copy_options::overwrite_existing, ec);
+        fs::remove(dstTmp, ec);
+    }
+
+    // 6. Only now delete the original file
     fs::remove(filePath, ec);
     LOG_ALERT("Scanner", "Quarantined threat: " + filePath, "{\"sha256\":\"" + sha256 + "\"}");
     return true;
 }
 
 std::vector<QuarantineEntry> Scanner::GetQuarantineRecords() {
+    std::lock_guard<std::mutex> lock(quarantineMutex_);
     std::vector<QuarantineEntry> entries;
     sqlite3* db = nullptr;
     std::string dbPath = quarantineDir_ + "/quarantine.db";
@@ -373,6 +451,7 @@ std::vector<QuarantineEntry> Scanner::GetQuarantineRecords() {
 }
 
 bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destinationPath) {
+    std::lock_guard<std::mutex> lock(quarantineMutex_);
     sqlite3* db = nullptr;
     std::string dbPath = quarantineDir_ + "/quarantine.db";
     std::string encName, origPath;
@@ -390,9 +469,32 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
         sqlite3_finalize(stmt);
     }
 
-    if (encName.empty()) {
+    if (encName.empty() || origPath.empty()) {
         sqlite3_close(db);
         return false;
+    }
+
+    // Determine target path and validate against path traversal
+    std::string target = destinationPath.empty() ? origPath : destinationPath;
+    if (target.find("..") != std::string::npos) {
+        sqlite3_close(db);
+        LOG_ALERT("Scanner", "Path traversal detected in restore path: " + target, "{}");
+        return false;
+    }
+
+    fs::path targetPath(target);
+    std::error_code ec;
+
+    // Handle collision: if target file already exists, avoid destroying unrelated files
+    if (fs::exists(targetPath, ec)) {
+        std::string stem = targetPath.stem().string();
+        std::string ext = targetPath.extension().string();
+        targetPath = targetPath.parent_path() / (stem + "_restored" + ext);
+    }
+
+    // Ensure parent directory exists
+    if (targetPath.has_parent_path()) {
+        fs::create_directories(targetPath.parent_path(), ec);
     }
 
     fs::path srcEnc = fs::path(quarantineDir_) / encName;
@@ -406,29 +508,67 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
     std::vector<uint8_t> tag(16);
     in.read(reinterpret_cast<char*>(iv.data()), 12);
     in.read(reinterpret_cast<char*>(tag.data()), 16);
+    if (in.gcount() != 16) {
+        in.close();
+        sqlite3_close(db);
+        return false;
+    }
+
     std::vector<uint8_t> ciphertext((std::istreambuf_iterator<char>(in)), {});
     in.close();
 
     fs::path keyPath = fs::path(quarantineDir_) / "master.key";
     std::ifstream keyIn(keyPath, std::ios::binary);
+    if (!keyIn) {
+        sqlite3_close(db);
+        return false;
+    }
     std::vector<uint8_t> encKey((std::istreambuf_iterator<char>(keyIn)), {});
-    std::vector<uint8_t> key;
-    crypto::DPAPIUnprotect(encKey, key);
+    keyIn.close();
 
-    std::vector<uint8_t> plaintext;
-    if (!crypto::AES256GCMDecrypt(ciphertext, key, iv, tag, plaintext)) {
+    std::vector<uint8_t> key;
+    if (!crypto::DPAPIUnprotect(encKey, key) || key.size() != 32) {
         sqlite3_close(db);
         return false;
     }
 
-    std::string target = destinationPath.empty() ? origPath : destinationPath;
-    std::ofstream out(target, std::ios::binary);
+    std::vector<uint8_t> plaintext;
+    bool decOk = crypto::AES256GCMDecrypt(ciphertext, key, iv, tag, plaintext);
+    SecureZeroMemory(key.data(), key.size());
+
+    if (!decOk) {
+        sqlite3_close(db);
+        LOG_ERROR("Scanner", "Decryption failed during restoration of: " + encName);
+        return false;
+    }
+
+    // Write to temporary restoring file
+    fs::path tmpRestore = targetPath;
+    tmpRestore += L".restoring";
+
+    std::ofstream out(tmpRestore, std::ios::binary);
     if (!out) {
         sqlite3_close(db);
         return false;
     }
-    out.write(reinterpret_cast<const char*>(plaintext.data()), plaintext.size());
+    if (!plaintext.empty()) {
+        out.write(reinterpret_cast<const char*>(plaintext.data()), plaintext.size());
+    }
     out.close();
+
+    // Verify restored file size matches plaintext
+    if (fs::file_size(tmpRestore, ec) != plaintext.size()) {
+        fs::remove(tmpRestore, ec);
+        sqlite3_close(db);
+        return false;
+    }
+
+    // Rename .restoring to target
+    fs::rename(tmpRestore, targetPath, ec);
+    if (ec) {
+        fs::copy_file(tmpRestore, targetPath, fs::copy_options::overwrite_existing, ec);
+        fs::remove(tmpRestore, ec);
+    }
 
     // Delete record from DB
     const char* delSql = "DELETE FROM quarantined_files WHERE id = ?;";
@@ -439,13 +579,13 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
     }
     sqlite3_close(db);
 
-    std::error_code ec;
     fs::remove(srcEnc, ec);
-    LOG_INFO("Scanner", "Restored quarantined file to: " + target);
+    LOG_INFO("Scanner", "Restored quarantined file to: " + targetPath.string());
     return true;
 }
 
 bool Scanner::DeleteQuarantinedFile(int64_t recordId) {
+    std::lock_guard<std::mutex> lock(quarantineMutex_);
     sqlite3* db = nullptr;
     std::string dbPath = quarantineDir_ + "/quarantine.db";
     std::string encName;

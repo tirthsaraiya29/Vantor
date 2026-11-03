@@ -94,25 +94,72 @@ struct QuarantineEntry {
 // Utilities
 inline std::string Utf16ToUtf8(const std::wstring& wstr) {
     if (wstr.empty()) return {};
-    int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 1) return {};
-    std::string out(len - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &out[0], len, nullptr, nullptr);
+    int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return {};
+    std::string out(len, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.length()), &out[0], len, nullptr, nullptr);
     return out;
 }
 
 inline std::wstring Utf8ToUtf16(const std::string& str) {
     if (str.empty()) return {};
-    int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-    if (len <= 1) return {};
-    std::wstring out(len - 1, 0);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &out[0], len);
+    int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
+    if (len <= 0) return {};
+    std::wstring out(len, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), &out[0], len);
     return out;
 }
 
 inline std::string ToLower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
     return s;
+}
+
+inline std::wstring ToLowerW(std::wstring s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](wchar_t c) { return (wchar_t)towlower(c); });
+    return s;
+}
+
+inline std::wstring NormalizePathSeparators(std::wstring p) {
+    for (auto& ch : p) {
+        if (ch == L'/') ch = L'\\';
+    }
+    return p;
+}
+
+inline std::string NormalizePathSeparators(std::string p) {
+    for (auto& ch : p) {
+        if (ch == '/') ch = '\\';
+    }
+    return p;
+}
+
+inline std::wstring GetExecutableDirectory() {
+    wchar_t modPath[MAX_PATH] = { 0 };
+    DWORD len = GetModuleFileNameW(nullptr, modPath, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) {
+        return L".";
+    }
+    std::wstring p(modPath);
+    size_t lastSlash = p.find_last_of(L"\\/");
+    if (lastSlash != std::wstring::npos) {
+        return p.substr(0, lastSlash);
+    }
+    return L".";
+}
+
+inline bool IsPathPrefixOf(const std::string& prefix, const std::string& fullPath) {
+    std::string normPrefix = ToLower(NormalizePathSeparators(prefix));
+    std::string normFull = ToLower(NormalizePathSeparators(fullPath));
+
+    if (normPrefix.empty() || normFull.empty()) return false;
+    if (normPrefix == normFull) return true;
+
+    if (!normPrefix.empty() && normPrefix.back() != '\\') {
+        normPrefix += '\\';
+    }
+
+    return normFull.rfind(normPrefix, 0) == 0;
 }
 
 inline std::string NowUtcIso8601() {

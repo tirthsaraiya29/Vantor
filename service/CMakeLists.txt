@@ -11,6 +11,7 @@ set(SERVICE_SOURCES
     IPC.cpp
     AntiTamper.cpp
     RealTimeProtection.cpp
+    ../backend/SignatureStore.cpp
 )
 
 set(SERVICE_HEADERS
@@ -19,6 +20,7 @@ set(SERVICE_HEADERS
     IPC.h
     AntiTamper.h
     RealTimeProtection.h
+    ../backend/SignatureStore.h
     ../common/Common.h
     ../common/Crypto.h
     ../common/NamedPipe.h
@@ -31,6 +33,7 @@ add_executable(VantorService ${SERVICE_SOURCES} ${SERVICE_HEADERS})
 target_include_directories(VantorService PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
+    ${CMAKE_CURRENT_SOURCE_DIR}/../backend
 )
 
 # MSVC Hardening flags

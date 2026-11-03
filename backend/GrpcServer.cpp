@@ -92,12 +92,28 @@ void VantorGrpcServer::WaitForShutdown() {
     }
 }
 
-std::string VantorGrpcServer::ProcessRpc(const std::string& method, const std::string& payload) {
+std::string VantorGrpcServer::ProcessRpc(const std::string& method, const std::string& payload, const std::string& clientToken) {
     try {
         json req = payload.empty() ? json::object() : json::parse(payload);
         json resp;
 
+        std::string effectiveToken = clientToken;
+        if (effectiveToken.empty() && req.is_object()) {
+            if (req.contains("token") && req["token"].is_string()) effectiveToken = req["token"].get<std::string>();
+            else if (req.contains("auth_token") && req["auth_token"].is_string()) effectiveToken = req["auth_token"].get<std::string>();
+        }
+
+        auto requireAuth = [&]() -> bool {
+            if (options_.authToken.empty()) return true;
+            if (effectiveToken == options_.authToken) return true;
+            return false;
+        };
+
         if (method == "/vantor.VantorBackendService/UpdateSignatures" || method == "UpdateSignatures") {
+            if (!requireAuth()) {
+                resp["error"] = "Unauthorized: invalid or missing auth token";
+                return resp.dump();
+            }
             std::vector<std::string> hashes;
             if (req.contains("sha256_hashes") && req["sha256_hashes"].is_array()) {
                 hashes = req["sha256_hashes"].get<std::vector<std::string>>();
@@ -137,6 +153,10 @@ std::string VantorGrpcServer::ProcessRpc(const std::string& method, const std::s
             resp["last_updated"] = NowUtcIso8601();
         }
         else if (method == "/vantor.VantorBackendService/TriggerScan" || method == "TriggerScan") {
+            if (!requireAuth()) {
+                resp["error"] = "Unauthorized: invalid or missing auth token";
+                return resp.dump();
+            }
             ipc::NamedPipeClient pipeClient;
             json cmd;
             cmd["cmd"] = "start_scan";
@@ -164,6 +184,10 @@ std::string VantorGrpcServer::ProcessRpc(const std::string& method, const std::s
             }
         }
         else if (method == "/vantor.VantorBackendService/RestoreQuarantine" || method == "RestoreQuarantine") {
+            if (!requireAuth()) {
+                resp["error"] = "Unauthorized: invalid or missing auth token";
+                return resp.dump();
+            }
             ipc::NamedPipeClient pipeClient;
             json cmd;
             cmd["cmd"] = "restore_quarantine";
@@ -178,6 +202,10 @@ std::string VantorGrpcServer::ProcessRpc(const std::string& method, const std::s
             }
         }
         else if (method == "/vantor.VantorBackendService/DeleteQuarantine" || method == "DeleteQuarantine") {
+            if (!requireAuth()) {
+                resp["error"] = "Unauthorized: invalid or missing auth token";
+                return resp.dump();
+            }
             ipc::NamedPipeClient pipeClient;
             json cmd;
             cmd["cmd"] = "delete_quarantine";
@@ -214,26 +242,87 @@ void VantorGrpcServer::ServerWorker() {
 
         // Handle connection in a dedicated thread
         std::thread([this, clientSocket]() {
-            std::vector<char> buffer(64 * 1024);
-            int bytesRead = recv(clientSocket, buffer.data(), static_cast<int>(buffer.size()) - 1, 0);
+            // Set 5-second socket timeout for read/write
+            DWORD timeout = 5000;
+            setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+            setsockopt(clientSocket, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
 
-            if (bytesRead > 0) {
-                buffer[bytesRead] = '\0';
-                std::string raw(buffer.data(), bytesRead);
+            std::string raw;
+            std::vector<char> chunk(8192);
+            size_t expectedContentLength = 0;
+            bool headersComplete = false;
+            size_t headerEndPos = std::string::npos;
+
+            while (raw.length() < 10 * 1024 * 1024) { // 10MB safety cap
+                int bytesRead = recv(clientSocket, chunk.data(), static_cast<int>(chunk.size()), 0);
+                if (bytesRead <= 0) break;
+                raw.append(chunk.data(), bytesRead);
+
+                if (!headersComplete) {
+                    headerEndPos = raw.find("\r\n\r\n");
+                    if (headerEndPos != std::string::npos) {
+                        headersComplete = true;
+                        // Look for Content-Length
+                        std::string lowerHeader = raw.substr(0, headerEndPos);
+                        for (auto& c : lowerHeader) c = static_cast<char>(tolower(c));
+                        size_t clPos = lowerHeader.find("content-length:");
+                        if (clPos != std::string::npos) {
+                            size_t numStart = clPos + 15;
+                            while (numStart < lowerHeader.length() && lowerHeader[numStart] == ' ') numStart++;
+                            size_t lineEnd = lowerHeader.find("\r\n", numStart);
+                            if (lineEnd != std::string::npos) {
+                                try {
+                                    expectedContentLength = std::stoul(lowerHeader.substr(numStart, lineEnd - numStart));
+                                } catch (...) {
+                                    expectedContentLength = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (headersComplete) {
+                    size_t bodyReceived = raw.length() - (headerEndPos + 4);
+                    if (bodyReceived >= expectedContentLength) {
+                        break;
+                    }
+                }
+            }
+
+            if (!raw.empty()) {
+                // Browser CSRF & DNS Rebinding Mitigation:
+                // Reject requests containing Origin: or cross-origin headers to prevent web pages from probing local RPC
+                if (raw.find("\nOrigin:") != std::string::npos ||
+                    raw.find("\r\nOrigin:") != std::string::npos ||
+                    raw.find("Sec-Fetch-Site: cross-site") != std::string::npos) {
+                    std::string forbid = "HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nCross-origin browser requests rejected.";
+                    send(clientSocket, forbid.data(), static_cast<int>(forbid.length()), 0);
+                    closesocket(clientSocket);
+                    return;
+                }
+
+                // Extract Authorization header if present
+                std::string clientToken;
+                size_t authPos = raw.find("Authorization: Bearer ");
+                if (authPos != std::string::npos) {
+                    size_t tokenStart = authPos + 22;
+                    size_t tokenEnd = raw.find("\r\n", tokenStart);
+                    if (tokenEnd != std::string::npos) {
+                        clientToken = raw.substr(tokenStart, tokenEnd - tokenStart);
+                    }
+                }
 
                 // Parse simple HTTP/1.1 or gRPC-JSON framing
                 std::string method = "GetConfig";
                 std::string body;
 
-                // Look for POST /path
                 if (raw.rfind("POST ", 0) == 0) {
                     size_t pathEnd = raw.find(' ', 5);
                     if (pathEnd != std::string::npos) {
                         method = raw.substr(5, pathEnd - 5);
                     }
-                    size_t bodyPos = raw.find("\r\n\r\n");
-                    if (bodyPos != std::string::npos) {
-                        body = raw.substr(bodyPos + 4);
+                    if (headerEndPos != std::string::npos) {
+                        body = raw.substr(headerEndPos + 4);
                     }
                 } else if (raw.rfind("GET ", 0) == 0) {
                     method = "GetConfig";
@@ -241,13 +330,13 @@ void VantorGrpcServer::ServerWorker() {
                     body = raw; // Raw JSON direct RPC
                 }
 
-                std::string responseBody = ProcessRpc(method, body);
+                std::string responseBody = ProcessRpc(method, body, clientToken);
 
                 std::ostringstream httpResp;
                 httpResp << "HTTP/1.1 200 OK\r\n"
                          << "Content-Type: application/json\r\n"
+                         << "X-Content-Type-Options: nosniff\r\n"
                          << "Content-Length: " << responseBody.length() << "\r\n"
-                         << "Access-Control-Allow-Origin: *\r\n"
                          << "Connection: close\r\n\r\n"
                          << responseBody;
 

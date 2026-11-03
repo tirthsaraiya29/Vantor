@@ -8,8 +8,11 @@ echo             VANTOR ENDPOINT SECURITY - ONE-CLICK BUILD
 echo ======================================================================
 echo [1/5] Detecting build environment...
 
-:: Close any running UI instances to release file locks
-taskkill /F /IM Vantor.exe >nul 2>&1
+:: Close any running instances or services to release binary file locks
+sc stop VantorAntivirusService >nul 2>&1
+taskkill /F /T /IM Vantor.exe >nul 2>&1
+taskkill /F /T /IM VantorService.exe >nul 2>&1
+taskkill /F /T /IM VantorBackend.exe >nul 2>&1
 
 :: 1. Find CMake
 where cmake >nul 2>&1
@@ -149,7 +152,7 @@ echo.
 echo All components work seamlessly with zero directory configuration.
 echo ======================================================================
 echo.
-pause
+if not "%1"=="--no-pause" if not "%CI%"=="true" pause
 exit /b 0
 
 :error
@@ -159,5 +162,5 @@ echo [BUILD FAILED] An error occurred during the build process.
 echo Please review the output above.
 echo ======================================================================
 echo.
-pause
+if not "%1"=="--no-pause" if not "%CI%"=="true" pause
 exit /b 1

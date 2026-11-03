@@ -52,17 +52,39 @@ bool RealTimeProtection::Start() {
 void RealTimeProtection::Stop() {
     if (!running_.exchange(false)) return;
 
+    {
+        std::lock_guard<std::mutex> lock(stateMutex_);
+        for (HANDLE h : dirHandles_) {
+            if (h != INVALID_HANDLE_VALUE && h != nullptr) {
+                CancelIoEx(h, nullptr);
+            }
+        }
+    }
+
     for (auto& t : watcherThreads_) {
         if (t.joinable()) {
             t.join();
         }
     }
     watcherThreads_.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(stateMutex_);
+        for (HANDLE h : dirHandles_) {
+            if (h != INVALID_HANDLE_VALUE && h != nullptr) {
+                CloseHandle(h);
+            }
+        }
+        dirHandles_.clear();
+    }
+
     LOG_INFO("RTP", "Real-Time Protection engine deactivated.");
 }
 
 bool RealTimeProtection::TryTerminateProcessByFilePath(const std::wstring& targetPath) {
     bool terminated = false;
+    std::wstring normTarget = ToLowerW(NormalizePathSeparators(targetPath));
+
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) return false;
 
@@ -71,14 +93,16 @@ bool RealTimeProtection::TryTerminateProcessByFilePath(const std::wstring& targe
 
     if (Process32FirstW(hSnap, &pe)) {
         do {
-            if (pe.th32ProcessID == GetCurrentProcessId()) continue;
+            // Never terminate Idle, System (PID 4), or our own process
+            if (pe.th32ProcessID <= 4 || pe.th32ProcessID == GetCurrentProcessId()) continue;
 
             HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
             if (hProc) {
                 wchar_t procPath[MAX_PATH] = { 0 };
                 DWORD size = MAX_PATH;
                 if (QueryFullProcessImageNameW(hProc, 0, procPath, &size)) {
-                    if (_wcsicmp(procPath, targetPath.c_str()) == 0) {
+                    std::wstring normProc = ToLowerW(NormalizePathSeparators(procPath));
+                    if (normProc == normTarget) {
                         TerminateProcess(hProc, 1);
                         terminated = true;
                         LOG_ALERT("RTP", "Terminated malicious process: " + Utf16ToUtf8(targetPath),
@@ -133,6 +157,11 @@ void RealTimeProtection::MonitorWorker(std::wstring directoryPath) {
         return;
     }
 
+    {
+        std::lock_guard<std::mutex> lock(stateMutex_);
+        dirHandles_.push_back(hDir);
+    }
+
     std::vector<BYTE> buffer(32 * 1024);
     DWORD bytesReturned = 0;
 
@@ -152,25 +181,29 @@ void RealTimeProtection::MonitorWorker(std::wstring directoryPath) {
                 nullptr,
                 nullptr)) {
 
-            auto* notify = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer.data());
-            while (notify) {
-                if (notify->Action == FILE_ACTION_ADDED || notify->Action == FILE_ACTION_MODIFIED) {
-                    std::wstring relName(notify->FileName, notify->FileNameLength / sizeof(wchar_t));
-                    std::wstring fullPath = directoryPath + L"\\" + relName;
-                    HandleFileEvent(fullPath);
-                }
+            if (!running_) break;
 
-                if (notify->NextEntryOffset == 0) break;
-                notify = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(
-                    reinterpret_cast<BYTE*>(notify) + notify->NextEntryOffset
-                );
+            if (bytesReturned >= sizeof(FILE_NOTIFY_INFORMATION)) {
+                size_t offset = 0;
+                while (offset + sizeof(FILE_NOTIFY_INFORMATION) <= bytesReturned) {
+                    auto* notify = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer.data() + offset);
+                    if (notify->FileNameLength > 0 &&
+                        offset + sizeof(FILE_NOTIFY_INFORMATION) - sizeof(WCHAR) + notify->FileNameLength <= bytesReturned) {
+                        if (notify->Action == FILE_ACTION_ADDED || notify->Action == FILE_ACTION_MODIFIED) {
+                            std::wstring relName(notify->FileName, notify->FileNameLength / sizeof(wchar_t));
+                            std::wstring fullPath = directoryPath + L"\\" + relName;
+                            HandleFileEvent(fullPath);
+                        }
+                    }
+
+                    if (notify->NextEntryOffset == 0) break;
+                    offset += notify->NextEntryOffset;
+                }
             }
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
-
-    CloseHandle(hDir);
 }
 
 } // namespace rtp

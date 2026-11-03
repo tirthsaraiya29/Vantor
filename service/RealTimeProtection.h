@@ -32,6 +32,7 @@ private:
     std::atomic<bool> running_{false};
     std::vector<std::thread> watcherThreads_;
     std::vector<std::wstring> watchPaths_;
+    std::vector<HANDLE> dirHandles_;
     std::mutex stateMutex_;
 };
 

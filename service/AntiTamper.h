@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <atomic>
 #include <thread>
+#include <mutex>
 
 #pragma comment(lib, "wintrust.lib")
 
@@ -63,9 +64,11 @@ private:
     std::wstring appDir_;
     std::wstring backupDir_;
     std::atomic<bool> running_{false};
+    std::atomic<HANDLE> hWatchdogDir_{INVALID_HANDLE_VALUE};
     std::thread watchdogThread_;
 
     // Baselines
+    mutable std::mutex baselineMutex_;
     std::unordered_map<std::wstring, std::string> baselineHashes_;
     std::string textSectionBaselineHash_;
     void* textSectionStart_ = nullptr;

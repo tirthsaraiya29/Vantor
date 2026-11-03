@@ -89,9 +89,16 @@ inline std::string ComputeSHA512Memory(const void* data, size_t size) {
 
 // Streaming File Hashes using 64KB chunks
 inline bool ComputeFileHashes(const std::wstring& filePath, std::string& sha256Out, std::string& sha512Out) {
-    HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+    HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_READ,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (hFile == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    LARGE_INTEGER sizeBefore{}, sizeAfter{};
+    if (!GetFileSizeEx(hFile, &sizeBefore)) {
+        CloseHandle(hFile);
         return false;
     }
 
@@ -120,7 +127,8 @@ inline bool ComputeFileHashes(const std::wstring& filePath, std::string& sha256O
                 }
             }
 
-            if (readOk) {
+            // Verify file size remained stable throughout the hash read
+            if (readOk && GetFileSizeEx(hFile, &sizeAfter) && sizeBefore.QuadPart == sizeAfter.QuadPart) {
                 std::vector<uint8_t> hash256(32);
                 std::vector<uint8_t> hash512(64);
                 if (NT_SUCCESS(BCryptFinishHash(hHash256, hash256.data(), 32, 0)) &&
@@ -227,12 +235,17 @@ inline bool AES256GCMEncrypt(
             ciphertext.resize(plaintext.size());
             ULONG bytesCopied = 0;
 
+            // When buffer is 0 bytes, BCrypt expects a non-null pointer with 0 length to avoid size query mode
+            uint8_t dummyByte = 0;
+            PUCHAR pbIn = plaintext.empty() ? &dummyByte : const_cast<PUCHAR>(plaintext.data());
+            PUCHAR pbOut = ciphertext.empty() ? &dummyByte : ciphertext.data();
+
             NTSTATUS status = BCryptEncrypt(hKey,
-                                            plaintext.empty() ? nullptr : const_cast<PUCHAR>(plaintext.data()),
+                                            pbIn,
                                             static_cast<ULONG>(plaintext.size()),
                                             &authInfo,
                                             nullptr, 0,
-                                            ciphertext.empty() ? nullptr : ciphertext.data(),
+                                            pbOut,
                                             static_cast<ULONG>(ciphertext.size()),
                                             &bytesCopied, 0);
             if (NT_SUCCESS(status)) {
@@ -280,12 +293,16 @@ inline bool AES256GCMDecrypt(
             plaintext.resize(ciphertext.size());
             ULONG bytesCopied = 0;
 
+            uint8_t dummyByte = 0;
+            PUCHAR pbIn = ciphertext.empty() ? &dummyByte : const_cast<PUCHAR>(ciphertext.data());
+            PUCHAR pbOut = plaintext.empty() ? &dummyByte : plaintext.data();
+
             NTSTATUS status = BCryptDecrypt(hKey,
-                                            ciphertext.empty() ? nullptr : const_cast<PUCHAR>(ciphertext.data()),
+                                            pbIn,
                                             static_cast<ULONG>(ciphertext.size()),
                                             &authInfo,
                                             nullptr, 0,
-                                            plaintext.empty() ? nullptr : plaintext.data(),
+                                            pbOut,
                                             static_cast<ULONG>(plaintext.size()),
                                             &bytesCopied, 0);
             if (NT_SUCCESS(status)) {

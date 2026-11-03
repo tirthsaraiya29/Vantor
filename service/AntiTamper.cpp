@@ -92,6 +92,11 @@ void AntiTamper::Start() {
 void AntiTamper::Stop() {
     if (!running_.exchange(false)) return;
 
+    HANDLE hDir = hWatchdogDir_.load();
+    if (hDir != INVALID_HANDLE_VALUE && hDir != nullptr) {
+        CancelIoEx(hDir, nullptr);
+    }
+
     if (watchdogThread_.joinable()) {
         watchdogThread_.join();
     }
@@ -222,10 +227,15 @@ bool AntiTamper::DetectApiHooks() {
         if (proc[0] == 0xFF && proc[1] == 0x25) {
             int32_t relOffset = *reinterpret_cast<const int32_t*>(proc + 2);
             const void* const* pTarget = reinterpret_cast<const void* const*>(proc + 6 + relOffset);
-            if (pTarget && *pTarget) {
-                if (!isLegitimateSystemModule(*pTarget)) {
-                    LOG_ALERT("AntiTamper", "Adversarial indirect JMP hook detected on API", "{\"api\":\"" + std::string(item.fn) + "\"}");
-                    return true;
+            MEMORY_BASIC_INFORMATION mbi{};
+            if (VirtualQuery(pTarget, &mbi, sizeof(mbi)) == sizeof(mbi) &&
+                (mbi.State == MEM_COMMIT) &&
+                !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+                if (pTarget && *pTarget) {
+                    if (!isLegitimateSystemModule(*pTarget)) {
+                        LOG_ALERT("AntiTamper", "Adversarial indirect JMP hook detected on API", "{\"api\":\"" + std::string(item.fn) + "\"}");
+                        return true;
+                    }
                 }
             }
         }
@@ -342,9 +352,14 @@ TamperAlert AntiTamper::RunComprehensiveIntegrityCheck() {
 
     // Check disk files against baseline
     for (const auto& f : protectedFiles_) {
-        auto it = baselineHashes_.find(f);
-        if (it == baselineHashes_.end()) {
-            continue; // Only enforce files established in baseline
+        std::string expectedHash;
+        {
+            std::lock_guard<std::mutex> lock(baselineMutex_);
+            auto it = baselineHashes_.find(f);
+            if (it == baselineHashes_.end()) {
+                continue; // Only enforce files established in baseline
+            }
+            expectedHash = it->second;
         }
 
         fs::path p = fs::path(appDir_) / f;
@@ -362,7 +377,7 @@ TamperAlert AntiTamper::RunComprehensiveIntegrityCheck() {
         } else {
             std::string s256, s512;
             if (crypto::ComputeFileHashes(p.wstring(), s256, s512)) {
-                if (s256 != it->second) {
+                if (s256 != expectedHash) {
                     if (RestoreFile(f)) {
                         LOG_WARN("AntiTamper", "Restored tampered protected file: " + Utf16ToUtf8(f));
                     } else {
@@ -381,6 +396,7 @@ TamperAlert AntiTamper::RunComprehensiveIntegrityCheck() {
 }
 
 void AntiTamper::BackupProtectedFiles() {
+    std::lock_guard<std::mutex> lock(baselineMutex_);
     for (const auto& f : protectedFiles_) {
         fs::path src = fs::path(appDir_) / f;
         if (fs::exists(src)) {
@@ -402,10 +418,18 @@ bool AntiTamper::RestoreFile(const std::wstring& filename) {
     if (!fs::exists(backup)) return false;
 
     // Verify backup hash before restoring
-    auto it = baselineHashes_.find(filename);
-    if (it != baselineHashes_.end()) {
+    std::string expectedHash;
+    {
+        std::lock_guard<std::mutex> lock(baselineMutex_);
+        auto it = baselineHashes_.find(filename);
+        if (it != baselineHashes_.end()) {
+            expectedHash = it->second;
+        }
+    }
+
+    if (!expectedHash.empty()) {
         std::string s256, s512;
-        if (!crypto::ComputeFileHashes(backup.wstring(), s256, s512) || s256 != it->second) {
+        if (!crypto::ComputeFileHashes(backup.wstring(), s256, s512) || s256 != expectedHash) {
             return false;
         }
     }
@@ -437,6 +461,7 @@ void AntiTamper::WatchdogWorker() {
         LOG_ERROR("AntiTamper", "Failed to open directory handle for watchdog.");
         return;
     }
+    hWatchdogDir_.store(hDir);
 
     std::vector<BYTE> buffer(16 * 1024);
     DWORD bytesReturned = 0;
@@ -459,16 +484,25 @@ void AntiTamper::WatchdogWorker() {
                 nullptr,
                 nullptr)) {
 
+            if (!running_) break;
+
             // Re-verify protected files immediately on any directory change
             for (const auto& f : protectedFiles_) {
                 fs::path p = fs::path(appDir_) / f;
-                auto it = baselineHashes_.find(f);
-                if (it != baselineHashes_.end()) {
+                std::string expectedHash;
+                {
+                    std::lock_guard<std::mutex> lock(baselineMutex_);
+                    auto it = baselineHashes_.find(f);
+                    if (it != baselineHashes_.end()) {
+                        expectedHash = it->second;
+                    }
+                }
+                if (!expectedHash.empty()) {
                     if (!fs::exists(p)) {
                         RestoreFile(f);
                     } else {
                         std::string s256, s512;
-                        if (crypto::ComputeFileHashes(p.wstring(), s256, s512) && s256 != it->second) {
+                        if (crypto::ComputeFileHashes(p.wstring(), s256, s512) && s256 != expectedHash) {
                             RestoreFile(f);
                         }
                     }
@@ -476,9 +510,12 @@ void AntiTamper::WatchdogWorker() {
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        for (int i = 0; i < 20 && running_; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
     }
 
+    hWatchdogDir_.store(INVALID_HANDLE_VALUE);
     CloseHandle(hDir);
 }
 

@@ -91,10 +91,18 @@ ZipInspectionResult ZipBombDetector::InspectArchive(const std::string& archivePa
 
     file.seekg(-static_cast<std::streamoff>(searchLen), std::ios::end);
     file.read(searchBuf.data(), searchLen);
+    if (file.gcount() != static_cast<std::streamsize>(searchLen)) {
+        res.verdict = ZipVerdict::CorruptArchive;
+        res.reason = "Failed to read trailing archive bytes for EOCD lookup.";
+        return res;
+    }
 
     int64_t eocdPosInBuf = -1;
     for (int64_t i = static_cast<int64_t>(searchLen) - sizeof(ZipEOCD); i >= 0; --i) {
-        if (*reinterpret_cast<const uint32_t*>(&searchBuf[i]) == 0x06054b50) {
+        if (static_cast<uint8_t>(searchBuf[i]) == 0x50 &&
+            static_cast<uint8_t>(searchBuf[i + 1]) == 0x4b &&
+            static_cast<uint8_t>(searchBuf[i + 2]) == 0x05 &&
+            static_cast<uint8_t>(searchBuf[i + 3]) == 0x06) {
             eocdPosInBuf = i;
             break;
         }
@@ -114,7 +122,7 @@ ZipInspectionResult ZipBombDetector::InspectArchive(const std::string& archivePa
     // Check for ZIP64 Locator
     if (eocdPosInBuf >= static_cast<int64_t>(sizeof(Zip64Locator))) {
         const auto* loc = reinterpret_cast<const Zip64Locator*>(&searchBuf[eocdPosInBuf - sizeof(Zip64Locator)]);
-        if (loc->signature == 0x07064b50) {
+        if (loc->signature == 0x07064b50 && loc->eocd64Offset < res.archiveFileSizeBytes) {
             file.seekg(loc->eocd64Offset, std::ios::beg);
             Zip64EOCD eocd64{};
             if (file.read(reinterpret_cast<char*>(&eocd64), sizeof(eocd64)) && eocd64.signature == 0x06064b50) {
@@ -131,6 +139,13 @@ ZipInspectionResult ZipBombDetector::InspectArchive(const std::string& archivePa
     if (totalEntries > maxEntries_) {
         res.verdict = ZipVerdict::EntryCountLimitExceeded;
         res.reason = "Archive contains " + std::to_string(totalEntries) + " entries, exceeding maximum safety limit of " + std::to_string(maxEntries_);
+        return res;
+    }
+
+    // Validate central directory boundaries
+    if (cdOffset > res.archiveFileSizeBytes || cdSize > res.archiveFileSizeBytes || (cdOffset + cdSize) > res.archiveFileSizeBytes) {
+        res.verdict = ZipVerdict::CorruptArchive;
+        res.reason = "Central directory offset or size points outside valid file bounds.";
         return res;
     }
 
@@ -156,25 +171,76 @@ ZipInspectionResult ZipBombDetector::InspectArchive(const std::string& archivePa
         std::string entryName(cdh.filenameLength, '\0');
         if (cdh.filenameLength > 0) {
             file.read(&entryName[0], cdh.filenameLength);
+            if (file.gcount() != static_cast<std::streamsize>(cdh.filenameLength)) {
+                res.verdict = ZipVerdict::CorruptArchive;
+                res.reason = "Truncated filename in central directory entry.";
+                return res;
+            }
         }
 
-        // Skip Extra field and Comment
-        if (cdh.extraFieldLength > 0 || cdh.commentLength > 0) {
-            file.seekg(cdh.extraFieldLength + cdh.commentLength, std::ios::cur);
+        uint64_t entryUncompressedSize = cdh.uncompressedSize;
+        uint64_t entryCompressedSize = cdh.compressedSize;
+        uint64_t entryLocalHeaderOffset = cdh.localHeaderOffset;
+
+        // Read and parse Extra Field if present (especially ZIP64 extra block)
+        if (cdh.extraFieldLength > 0) {
+            std::vector<uint8_t> extra(cdh.extraFieldLength);
+            file.read(reinterpret_cast<char*>(extra.data()), cdh.extraFieldLength);
+            if (file.gcount() != static_cast<std::streamsize>(cdh.extraFieldLength)) {
+                res.verdict = ZipVerdict::CorruptArchive;
+                res.reason = "Truncated extra field in central directory entry.";
+                return res;
+            }
+
+            size_t exOff = 0;
+            while (exOff + 4 <= extra.size()) {
+                uint16_t tag = *reinterpret_cast<const uint16_t*>(&extra[exOff]);
+                uint16_t len = *reinterpret_cast<const uint16_t*>(&extra[exOff + 2]);
+                exOff += 4;
+                if (exOff + len > extra.size()) break;
+
+                // ZIP64 Extended Information Extra Field (Tag 0x0001)
+                if (tag == 0x0001) {
+                    size_t z64Off = exOff;
+                    if (entryUncompressedSize == 0xFFFFFFFF && z64Off + 8 <= exOff + len) {
+                        memcpy(&entryUncompressedSize, &extra[z64Off], 8);
+                        z64Off += 8;
+                    }
+                    if (entryCompressedSize == 0xFFFFFFFF && z64Off + 8 <= exOff + len) {
+                        memcpy(&entryCompressedSize, &extra[z64Off], 8);
+                        z64Off += 8;
+                    }
+                    if (entryLocalHeaderOffset == 0xFFFFFFFF && z64Off + 8 <= exOff + len) {
+                        memcpy(&entryLocalHeaderOffset, &extra[z64Off], 8);
+                        z64Off += 8;
+                    }
+                }
+                exOff += len;
+            }
+        }
+
+        // Skip Comment
+        if (cdh.commentLength > 0) {
+            file.seekg(cdh.commentLength, std::ios::cur);
         }
 
         ZipEntryInfo info;
         info.filename = entryName;
-        info.compressedSize = cdh.compressedSize;
-        info.uncompressedSize = cdh.uncompressedSize;
-        info.localHeaderOffset = cdh.localHeaderOffset;
+        info.compressedSize = entryCompressedSize;
+        info.uncompressedSize = entryUncompressedSize;
+        info.localHeaderOffset = entryLocalHeaderOffset;
         info.isDirectory = (!entryName.empty() && (entryName.back() == '/' || entryName.back() == '\\'));
 
         uint64_t denom = (info.compressedSize > 0) ? info.compressedSize : 1;
         info.compressionRatio = static_cast<double>(info.uncompressedSize) / denom;
 
-        // Path Traversal Check (e.g. "../../../Windows/System32")
-        if (entryName.find("../") != std::string::npos || entryName.find("..\\") != std::string::npos) {
+        // Path Traversal Check (e.g. "../../../Windows/System32" or absolute paths)
+        if (entryName.find("../") != std::string::npos ||
+            entryName.find("..\\") != std::string::npos ||
+            entryName.find("/..") != std::string::npos ||
+            entryName.find("\\..") != std::string::npos ||
+            (!entryName.empty() && (entryName[0] == '/' || entryName[0] == '\\')) ||
+            (entryName.length() >= 2 && entryName[1] == ':')) {
             res.verdict = ZipVerdict::PathTraversalAttempt;
             res.reason = "Path traversal sequence detected in entry name: " + entryName;
             res.suspiciousEntries.push_back(info);

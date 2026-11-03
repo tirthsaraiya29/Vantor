@@ -66,7 +66,7 @@ inline bool ReadFramedMessage(HANDLE hPipe, std::string& message, DWORD timeoutM
         return false;
     }
 
-    if (length > 10 * 1024 * 1024) { // 10MB safety sanity cap
+    if (length > 2 * 1024 * 1024) { // 2MB safety sanity cap for framed IPC
         return false;
     }
 
@@ -184,6 +184,13 @@ public:
         if (hStopEvent_) {
             SetEvent(hStopEvent_);
         }
+
+        HANDLE hPipe = currentPipe_.load();
+        if (hPipe != INVALID_HANDLE_VALUE && hPipe != nullptr) {
+            CancelIoEx(hPipe, nullptr);
+            DisconnectNamedPipe(hPipe);
+        }
+
         // Connect a dummy client to wake up any blocking ConnectNamedPipe
         HANDLE hWake = CreateFileW(pipeName_.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
         if (hWake != INVALID_HANDLE_VALUE) {
@@ -206,10 +213,17 @@ private:
             return;
         }
 
+        bool isFirstInstance = true;
+
         while (running_) {
+            DWORD openMode = PIPE_ACCESS_DUPLEX;
+            if (isFirstInstance) {
+                openMode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
+            }
+
             HANDLE hPipe = CreateNamedPipeW(
                 pipeName_.c_str(),
-                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                openMode,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
                 PIPE_UNLIMITED_INSTANCES,
                 DEFAULT_PIPE_BUFFER_SIZE,
@@ -219,9 +233,14 @@ private:
             );
 
             if (hPipe == INVALID_HANDLE_VALUE) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                // If access denied or other error on first instance, retry without first-instance flag
+                isFirstInstance = false;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
             }
+
+            isFirstInstance = false;
+            currentPipe_.store(hPipe);
 
             BOOL connected = ConnectNamedPipe(hPipe, nullptr) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
@@ -235,6 +254,7 @@ private:
                 }
             }
 
+            currentPipe_.store(INVALID_HANDLE_VALUE);
             DisconnectNamedPipe(hPipe);
             CloseHandle(hPipe);
         }
@@ -244,6 +264,7 @@ private:
 
     std::wstring pipeName_;
     std::atomic<bool> running_;
+    std::atomic<HANDLE> currentPipe_{ INVALID_HANDLE_VALUE };
     HANDLE hStopEvent_;
     std::thread serverThread_;
     MessageHandler handler_;

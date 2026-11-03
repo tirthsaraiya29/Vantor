@@ -30,9 +30,8 @@ void ConfigManager::UpdateConfig(const EngineConfig& newConfig) {
 
 bool ConfigManager::IsPathExcluded(const std::string& path) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    std::string lowerPath = ToLower(path);
     for (const auto& excluded : config_.excludedPaths) {
-        if (!excluded.empty() && lowerPath.find(ToLower(excluded)) != std::string::npos) {
+        if (!excluded.empty() && IsPathPrefixOf(excluded, path)) {
             return true;
         }
     }
