@@ -39,6 +39,7 @@ test_*.idx
 *.pdb
 *.deps.json
 *.runtimeconfig.json
+*_wpftmp.csproj
 
 # ------------------------------------------------------------
 # Visual C++ / MSBuild build artifacts

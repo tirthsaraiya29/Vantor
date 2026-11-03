@@ -1,0 +1,150 @@
+<UserControl x:Class="Vantor.Views.QuarantineVaultView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:common="clr-namespace:Vantor.Common"
+             mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="950">
+
+    <UserControl.Resources>
+        <common:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <common:BytesToStringConverter x:Key="BytesToStr"/>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource BrushBgDeep}" Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,20">
+            <StackPanel>
+                <TextBlock Text="Quarantine Containment Vault" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="AES-256-GCM encrypted threats isolated with DPAPI master keys." Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,3,0,0"/>
+            </StackPanel>
+            <Button Content="REFRESH" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Right" Command="{Binding RefreshCommand}" Padding="16,8"/>
+        </Grid>
+
+        <!-- Search Bar & Status Banner -->
+        <Grid Grid.Row="1" Margin="0,0,0,16">
+            <Border Background="{StaticResource BrushBgSurface}" CornerRadius="8" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="12,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Data="{StaticResource IconScanSearch}" Fill="{StaticResource BrushTextMuted}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Column="1" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                             Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12"
+                             VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Main Content Area: DataGrid + Detail Drawer -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Vault Table -->
+            <Border Grid.Column="0" Style="{StaticResource GlassCardStyle}" Padding="0">
+                <Grid>
+                    <TextBlock Text="The containment vault is currently empty. Your system is secure."
+                               Foreground="{StaticResource BrushTextMuted}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13"
+                               Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}"/>
+
+                    <DataGrid ItemsSource="{Binding FilteredItems}" SelectedItem="{Binding SelectedItem}"
+                              Style="{StaticResource CyberDataGridStyle}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="FILE NAME" Binding="{Binding FileName}" Width="180"/>
+                            <DataGridTextColumn Header="THREAT CLASSIFICATION" Binding="{Binding ThreatName}" Width="200"/>
+                            <DataGridTextColumn Header="ORIGINAL PATH" Binding="{Binding OriginalPath}" Width="*"/>
+                            <DataGridTextColumn Header="DATE ISOLATED" Binding="{Binding Timestamp}" Width="150"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Slide-Over Threat Detail Drawer -->
+            <Border Grid.Column="1" Width="360" Style="{StaticResource GlassCardStyle}" Margin="16,0,0,0" Padding="20"
+                    Visibility="{Binding IsDetailDrawerOpen, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Drawer Header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <TextBlock Text="Threat Forensics" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                        <Button Content="✕" HorizontalAlignment="Right" Background="Transparent" Foreground="{StaticResource BrushTextMuted}"
+                                BorderThickness="0" Cursor="Hand" Command="{Binding CloseDrawerCommand}"/>
+                    </Grid>
+
+                    <!-- Forensics Body -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- Threat Name Badge -->
+                            <Border Background="#2A1215" BorderBrush="{StaticResource BrushCrimsonThreat}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="DETECTED THREAT" Foreground="{StaticResource BrushTextMuted}" FontSize="9" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding SelectedItem.ThreatName}" Foreground="{StaticResource BrushCrimsonThreat}" FontSize="13" FontWeight="Bold" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- File Details -->
+                            <TextBlock Text="FILE PROPERTIES" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <Border Background="#090E1A" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="File Name" Foreground="{StaticResource BrushTextMuted}" FontSize="10"/>
+                                    <TextBlock Text="{Binding SelectedItem.FileName}" Foreground="White" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+
+                                    <TextBlock Text="Original Location" Foreground="{StaticResource BrushTextMuted}" FontSize="10" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding SelectedItem.OriginalPath}" Foreground="{StaticResource BrushTextSecondary}" FontSize="11" TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="Payload Size" Foreground="{StaticResource BrushTextMuted}" FontSize="10" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding SelectedItem.FileSizeBytes, Converter={StaticResource BytesToStr}}" Foreground="White" FontSize="11"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Cryptographic Hashes -->
+                            <TextBlock Text="CRYPTOGRAPHIC DIGESTS" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <Border Background="#090E1A" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="SHA-256" Foreground="{StaticResource BrushTextMuted}" FontSize="10"/>
+                                    <TextBlock Text="{Binding SelectedItem.Sha256}" Foreground="{StaticResource BrushCyanAccent}" FontSize="10" FontFamily="Consolas" TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="SHA-512" Foreground="{StaticResource BrushTextMuted}" FontSize="10" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding SelectedItem.Sha512}" Foreground="{StaticResource BrushTextSecondary}" FontSize="9" FontFamily="Consolas" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Entropy Rating -->
+                            <TextBlock Text="HEURISTIC ENTROPY RATING" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,8"/>
+                            <Border Background="#090E1A" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="Shannon Entropy" Foreground="{StaticResource BrushTextSecondary}" FontSize="11"/>
+                                        <TextBlock Text="{Binding SelectedItem.ShannonEntropy, StringFormat='{}{0:0.00} / 8.0'}" Foreground="{StaticResource BrushAmberWarning}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <ProgressBar Value="{Binding SelectedItem.ShannonEntropy}" Maximum="8" Height="6" Background="#1E293B" Foreground="{StaticResource BrushAmberWarning}" BorderThickness="0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Action Controls -->
+                    <UniformGrid Grid.Row="2" Columns="2" Margin="0,16,0,0">
+                        <Button Content="RESTORE" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding RestoreItemCommand}" CommandParameter="{Binding SelectedItem}" Margin="0,0,6,0"/>
+                        <Button Content="SHRED" Style="{StaticResource DangerButtonStyle}" Command="{Binding DeleteItemCommand}" CommandParameter="{Binding SelectedItem}" Margin="6,0,0,0"/>
+                    </UniformGrid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

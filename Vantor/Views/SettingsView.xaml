@@ -1,0 +1,65 @@
+<UserControl x:Class="Vantor.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="900">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32">
+            <!-- Header -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="Security &amp; Protection Policies" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="Configure active defensive shields, heuristic sensitivities, and background notification options." Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <!-- Active Defense Shields Card -->
+            <Border Style="{StaticResource GlassCardStyle}" Padding="24" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Active Defense Shields" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,16"/>
+
+                    <CheckBox Content="Real-Time Protection (Continuous Filesystem Watchdog)"
+                              IsChecked="{Binding IsRtpEnabled}"
+                              Style="{StaticResource CyberToggleSwitchStyle}" Margin="0,0,0,16"/>
+
+                    <CheckBox Content="User-Mode Anti-Tamper &amp; Self-Healing Protection"
+                              IsChecked="{Binding IsAntiTamperEnabled}"
+                              Style="{StaticResource CyberToggleSwitchStyle}" Margin="0,0,0,16"/>
+
+                    <CheckBox Content="Audible Security Cues (Subtle audio on threat detections and scan completion)"
+                              IsChecked="{Binding IsSoundEnabled}"
+                              Style="{StaticResource CyberToggleSwitchStyle}" Margin="0,0,0,10"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Sensitivity Sliders Card -->
+            <Border Style="{StaticResource GlassCardStyle}" Padding="24" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Detection Engine Parameters" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,20"/>
+
+                    <!-- Heuristic Threshold -->
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Heuristic Sensitivity Threshold" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding HeuristicThreshold, StringFormat='{}{0:0}%'}" Foreground="{StaticResource BrushCyanAccent}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Slider Minimum="50" Maximum="95" Value="{Binding HeuristicThreshold}" Style="{StaticResource CyberSliderStyle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Higher values reduce false-positives; lower values flag suspicious double extensions and high entropy more aggressively." Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,0,0,24"/>
+
+                    <!-- Zip-Bomb Max Ratio -->
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Zip-Bomb Max Ratio Ceiling" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ZipBombRatioLimit, StringFormat='{}{0:0}.0x'}" Foreground="{StaticResource BrushAmberWarning}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Slider Minimum="5" Maximum="50" Value="{Binding ZipBombRatioLimit}" Style="{StaticResource CyberSliderStyle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Archives with overall compression ratios exceeding this limit are quarantined to prevent exhaustion attacks." Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,0,0,24"/>
+
+                    <!-- Save Button & Feedback Notice -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="APPLY SETTINGS" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding SaveSettingsCommand}" Width="160" Height="38"/>
+                        <TextBlock Text="{Binding StatusNotice}" Foreground="{StaticResource BrushEmeraldSafe}" FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

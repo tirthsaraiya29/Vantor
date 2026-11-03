@@ -119,7 +119,9 @@ if %ERRORLEVEL% neq 0 (
 )
 
 if exist "build\publish\Vantor.exe" (
-    copy /Y "build\publish\Vantor.exe" ".\Vantor.exe" >nul
+    taskkill /F /T /IM Vantor.exe >nul 2>&1
+    timeout /t 1 /nobreak >nul 2>&1
+    copy /Y "build\publish\Vantor.exe" ".\Vantor.exe" >nul 2>&1
 )
 
 echo [OK] Standalone Vantor.exe generated in root folder.

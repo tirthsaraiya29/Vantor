@@ -1,0 +1,63 @@
+<UserControl x:Class="Vantor.Views.SignaturesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="900">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32">
+            <!-- Header -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="Threat Signatures Database &amp; Bloom Index" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                <TextBlock Text="Dual-layer storage coupling SQLite persistence with a 128 KB memory-mapped binary Bloom filter." Foreground="{StaticResource BrushTextMuted}" FontSize="12" Margin="0,3,0,0"/>
+            </StackPanel>
+
+            <!-- Main Specs Card -->
+            <Border Style="{StaticResource GlassCardStyle}" Padding="24" Margin="0,0,0,24">
+                <StackPanel>
+                    <Grid Margin="0,0,0,20">
+                        <TextBlock Text="Signature Engine Metrics" Foreground="White" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="IMPORT HASHES (.TXT)..." Style="{StaticResource PrimaryButtonStyle}"
+                                    Command="{Binding ImportHashesCommand}" Margin="0,0,10,0" Padding="16,8"/>
+                            <Button Content="CHECK FOR UPDATES" Style="{StaticResource InteractiveActionCardStyle}"
+                                    Command="{Binding CheckUpdatesCommand}" Padding="16,8" Foreground="{StaticResource BrushCyanAccent}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <UniformGrid Columns="3" Margin="0,0,0,20">
+                        <Border Background="#090E1A" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="8" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="TOTAL INDEXED SIGNATURES" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding TotalSignatures}" Foreground="{StaticResource BrushCyanAccent}" FontSize="24" FontWeight="Bold" Margin="0,6,0,0"/>
+                                <TextBlock Text="Verified against SQLite store" Foreground="{StaticResource BrushTextDim}" FontSize="10" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#090E1A" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="8" Padding="18" Margin="10,0">
+                            <StackPanel>
+                                <TextBlock Text="LOOKUP THROUGHPUT" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding LookupThroughput}" Foreground="{StaticResource BrushEmeraldSafe}" FontSize="24" FontWeight="Bold" Margin="0,6,0,0"/>
+                                <TextBlock Text="Zero kernel context switch" Foreground="{StaticResource BrushTextDim}" FontSize="10" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#090E1A" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="8" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="BLOOM REJECTION SPEED" Foreground="{StaticResource BrushTextMuted}" FontSize="10" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding BloomFilterRejection}" Foreground="#A7F3D0" FontSize="24" FontWeight="Bold" Margin="0,6,0,0"/>
+                                <TextBlock Text="Murmur3 3-hash bit vector" Foreground="{StaticResource BrushTextDim}" FontSize="10" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+
+                    <Border Background="#060A14" CornerRadius="6" Padding="14">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconDatabase}" Fill="{StaticResource BrushCyanAccent}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource BrushTextSecondary}" FontSize="12" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

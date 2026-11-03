@@ -1,602 +1,128 @@
 <Window x:Class="Vantor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Vantor Endpoint Security" Height="650" Width="1020"
-        WindowStyle="None" AllowsTransparency="True" 
+        xmlns:vm="clr-namespace:Vantor.ViewModels"
+        xmlns:views="clr-namespace:Vantor.Views"
+        Title="Vantor Endpoint Security"
+        MinWidth="1040" MinHeight="660" Width="1160" Height="740"
+        WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize" AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter">
+        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Window Control Button Style -->
-        <Style x:Key="ControlButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#888888"/>
-            <Setter Property="Width" Value="45"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter TargetName="BtnBorder" Property="Background" Value="#222222"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Sidebar Navigation Button Style -->
-        <Style x:Key="NavButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#94A3B8"/>
-            <Setter Property="Height" Value="42"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Margin="8,2">
-                            <ContentPresenter VerticalAlignment="Center" Margin="14,0,0,0"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1E293B"/>
-                                <Setter Property="Foreground" Value="#F8FAFC"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Action Card Button Style -->
-        <Style x:Key="CardStyle" TargetType="Button">
-            <Setter Property="Background" Value="#111827"/>
-            <Setter Property="BorderBrush" Value="#1F2937"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#38BDF8"/>
-                                <Setter TargetName="border" Property="Background" Value="#1E293B"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Primary Glow Button -->
-        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#0284C7"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#0369A1"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Danger Button -->
-        <Style x:Key="DangerButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#DC2626"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#B91C1C"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Dark DataGrid Styling -->
-        <Style x:Key="DarkColumnHeader" TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="#111827"/>
-            <Setter Property="Foreground" Value="#94A3B8"/>
-            <Setter Property="Padding" Value="12,10"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="BorderBrush" Value="#1E293B"/>
-        </Style>
-
-        <Style x:Key="DarkRowStyle" TargetType="DataGridRow">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#E2E8F0"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#1E293B"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="VantorDataGrid" TargetType="DataGrid">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="GridLinesVisibility" Value="None"/>
-            <Setter Property="RowHeaderWidth" Value="0"/>
-            <Setter Property="AutoGenerateColumns" Value="False"/>
-            <Setter Property="IsReadOnly" Value="True"/>
-            <Setter Property="ColumnHeaderStyle" Value="{StaticResource DarkColumnHeader}"/>
-            <Setter Property="RowStyle" Value="{StaticResource DarkRowStyle}"/>
-            <Setter Property="CellStyle">
-                <Setter.Value>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="Padding" Value="10,8"/>
-                        <Setter Property="BorderThickness" Value="0"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="DataGridCell">
-                                    <Border Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
-                                        <ContentPresenter VerticalAlignment="Center" />
-                                    </Border>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Scanner Rotation Animation -->
-        <Storyboard x:Key="RotateScanner" RepeatBehavior="Forever">
-            <DoubleAnimation Storyboard.TargetName="ScannerRotation"
-                             Storyboard.TargetProperty="Angle"
-                             From="0" To="360" Duration="0:0:2.5"/>
-        </Storyboard>
+        <!-- Dynamic View Mappings for MVVM ContentControl -->
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+            <views:DashboardView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ScanCenterViewModel}">
+            <views:ScanCenterView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:QuarantineVaultViewModel}">
+            <views:QuarantineVaultView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AntiTamperViewModel}">
+            <views:AntiTamperView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ZipBombViewModel}">
+            <views:ZipBombView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SignaturesViewModel}">
+            <views:SignaturesView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+            <views:SettingsView/>
+        </DataTemplate>
     </Window.Resources>
 
-    <!-- Main Window Root Border -->
-    <Border CornerRadius="14" Background="#0B0F19" BorderBrush="#1E293B" BorderThickness="1.5">
+    <!-- Main Window Outer Border with Subtle Glass Shadow -->
+    <Border Background="{StaticResource BrushBgDeep}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1.5" CornerRadius="12">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="42"/>
+                <RowDefinition Height="40"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210"/>
+                <ColumnDefinition Width="220"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Top Title Bar -->
-            <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="#070A12" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
-                    <TextBlock Text="🛡️" FontSize="14" VerticalAlignment="Center"/>
-                    <TextBlock Text="VANTOR // ENDPOINT PROTECTION" Foreground="#38BDF8" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                    <Border Background="#1E293B" CornerRadius="4" Padding="6,2" Margin="15,0,0,0">
-                        <TextBlock Text="C++ WIN32 SERVICE ACTIVE" Foreground="#10B981" FontSize="9" FontWeight="Bold"/>
+            <!-- Top TitleBar (Chrome Draggable) -->
+            <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource BrushBgObsidian}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Brand & Logo -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <Path Data="{StaticResource IconShield}" Fill="{StaticResource BrushCyanAccent}" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="VANTOR // ENDPOINT SECURITY" Foreground="{StaticResource BrushCyanAccent}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center"/>
+                    
+                    <!-- Dynamic Engine Status Pill -->
+                    <Border Background="#10172A" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="10" Padding="8,3" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="6" Height="6" Fill="{Binding EngineStatusColor}" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding EngineStatusText}" Foreground="{Binding EngineStatusColor}" FontSize="9" FontWeight="Bold"/>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="—" Style="{StaticResource ControlButtonStyle}" Click="MinimizeButton_Click"/>
-                    <Button Content="✕" Style="{StaticResource ControlButtonStyle}" Click="CloseButton_Click"/>
+
+                <!-- Draggable Middle Spacer -->
+                <Grid Grid.Column="1" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"/>
+
+                <!-- Window Control Buttons (Minimize, Maximize/Restore, Close) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{StaticResource WindowChromeButtonStyle}" Tag="{StaticResource IconMinimize}" Click="MinimizeButton_Click"/>
+                    <Button Style="{StaticResource WindowChromeButtonStyle}" Tag="{StaticResource IconMaximize}" Click="MaximizeButton_Click"/>
+                    <Button Style="{StaticResource WindowChromeCloseButtonStyle}" Click="CloseButton_Click"/>
                 </StackPanel>
             </Grid>
 
-            <!-- Left Sidebar Navigation -->
-            <Grid Grid.Row="1" Grid.Column="0" Background="#070A12">
+            <!-- Left Navigation Sidebar -->
+            <Grid Grid.Row="1" Grid.Column="0" Background="{StaticResource BrushBgObsidian}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,15,0,0">
-                        <TextBlock Text="PROTECTION" Foreground="#475569" Margin="22,10,0,8" FontSize="10" FontWeight="Bold"/>
-                        <Button Content="🛡️  Dashboard" Style="{StaticResource NavButtonStyle}" Click="NavDashboard_Click"/>
-                        <Button Content="⚡  Scan Center" Style="{StaticResource NavButtonStyle}" Click="NavScanCenter_Click"/>
-                        <Button Content="🔒  Quarantine Vault" Style="{StaticResource NavButtonStyle}" Click="NavQuarantine_Click"/>
+                    <!-- Nav Items -->
+                    <StackPanel DockPanel.Dock="Top" Margin="0,16,0,0">
+                        <TextBlock Text="PROTECTION CENTER" Foreground="{StaticResource BrushTextDim}" Margin="20,8,0,8" FontSize="10" FontWeight="Bold"/>
+                        <RadioButton Content="Dashboard" Tag="{StaticResource IconShield}" Style="{StaticResource CyberNavButtonStyle}"
+                                     IsChecked="True" Command="{Binding NavigateDashboardCommand}" GroupName="NavGroup"/>
+                        <RadioButton Content="Scan Center" Tag="{StaticResource IconRadar}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateScanCenterCommand}" GroupName="NavGroup"/>
+                        <RadioButton Content="Quarantine Vault" Tag="{StaticResource IconLockVault}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateQuarantineCommand}" GroupName="NavGroup"/>
 
-                        <TextBlock Text="ADVANCED TOOLS" Foreground="#475569" Margin="22,20,0,8" FontSize="10" FontWeight="Bold"/>
-                        <Button Content="🔍  Anti-Tamper Audit" Style="{StaticResource NavButtonStyle}" Click="NavAntiTamper_Click"/>
-                        <Button Content="💣  Zip-Bomb Inspector" Style="{StaticResource NavButtonStyle}" Click="NavZipBomb_Click"/>
-                        <Button Content="💾  Signatures Database" Style="{StaticResource NavButtonStyle}" Click="NavSignatures_Click"/>
-                        <Button Content="⚙️  Security Settings" Style="{StaticResource NavButtonStyle}" Click="NavSettings_Click"/>
+                        <TextBlock Text="ADVANCED DEFENSE" Foreground="{StaticResource BrushTextDim}" Margin="20,20,0,8" FontSize="10" FontWeight="Bold"/>
+                        <RadioButton Content="Anti-Tamper Audit" Tag="{StaticResource IconBugAudit}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateAntiTamperCommand}" GroupName="NavGroup"/>
+                        <RadioButton Content="Zip-Bomb Auditor" Tag="{StaticResource IconArchiveBomb}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateZipBombCommand}" GroupName="NavGroup"/>
+                        <RadioButton Content="Signatures Database" Tag="{StaticResource IconDatabase}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateSignaturesCommand}" GroupName="NavGroup"/>
+                        <RadioButton Content="Security Policies" Tag="{StaticResource IconSettings}" Style="{StaticResource CyberNavButtonStyle}"
+                                     Command="{Binding NavigateSettingsCommand}" GroupName="NavGroup"/>
                     </StackPanel>
 
                     <!-- Bottom Status Indicator -->
-                    <Border DockPanel.Dock="Bottom" Background="#111827" Margin="12" CornerRadius="8" Padding="12,10">
+                    <Border DockPanel.Dock="Bottom" Background="#0C1322" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="12" CornerRadius="8" Padding="12,10">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#10B981" Margin="0,0,8,0"/>
-                                <TextBlock x:Name="lblEngineStatus" Text="Real-Time Active" Foreground="#A7F3D0" FontSize="11" FontWeight="SemiBold"/>
+                                <Ellipse Width="7" Height="7" Fill="{Binding EngineStatusColor}" Margin="0,0,7,0"/>
+                                <TextBlock Text="{Binding EngineStatusText}" Foreground="{StaticResource BrushTextSecondary}" FontSize="11" FontWeight="SemiBold"/>
                             </StackPanel>
-                            <TextBlock Text="v2.0.0-PROD (Win64)" Foreground="#64748B" FontSize="10" Margin="16,3,0,0"/>
+                            <TextBlock Text="v2.1.0-ENTERPRISE (x64)" Foreground="{StaticResource BrushTextDim}" FontSize="9" Margin="14,2,0,0"/>
                         </StackPanel>
                     </Border>
                 </DockPanel>
             </Grid>
 
-            <!-- Right Content Views -->
-            <Grid Grid.Row="1" Grid.Column="1" Background="#0B0F19">
-
-                <!-- 1. DASHBOARD VIEW -->
-                <Grid x:Name="DashboardView" Margin="30">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <!-- System Protection Status Card -->
-                            <Border x:Name="cardSecurityStatus" Background="#064E3B" BorderBrush="#059669" BorderThickness="1" CornerRadius="12" Padding="25,20" Margin="0,0,0,25">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="SYSTEM IS SECURE &amp; PROTECTED" Foreground="White" FontSize="18" FontWeight="Bold"/>
-                                        <TextBlock Text="Win32 Service, memory-mapped signatures index, and anti-tamper watchdog active." Foreground="#A7F3D0" FontSize="12" Margin="0,4,0,0"/>
-                                    </StackPanel>
-                                    <Button Grid.Column="1" Content="RUN INTEGRITY CHECK" Style="{StaticResource PrimaryButtonStyle}" Click="NavAntiTamper_Click" VerticalAlignment="Center"/>
-                                </Grid>
-                            </Border>
-
-                            <!-- Fast Action Cards Grid -->
-                            <TextBlock Text="Quick Protection Actions" Foreground="White" FontSize="15" FontWeight="Bold" Margin="0,0,0,12"/>
-                            <UniformGrid Columns="3" Margin="0,0,0,25">
-                                <Button Style="{StaticResource CardStyle}" Tag="quick" Click="StartScan_Click" Margin="0,0,10,0" Height="100">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="⚡" FontSize="26" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Quick Scan" Foreground="White" FontWeight="SemiBold" FontSize="13" Margin="0,6,0,0" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Downloads, Desktop, Startup" Foreground="#64748B" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource CardStyle}" Tag="full" Click="StartScan_Click" Margin="5,0,5,0" Height="100">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="🔍" FontSize="26" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Full System Scan" Foreground="White" FontWeight="SemiBold" FontSize="13" Margin="0,6,0,0" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="All fixed local drives" Foreground="#64748B" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource CardStyle}" Click="BtnCustomScan_Click" Margin="10,0,0,0" Height="100">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="📁" FontSize="26" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Custom Scan" Foreground="White" FontWeight="SemiBold" FontSize="13" Margin="0,6,0,0" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Pick folder or file" Foreground="#64748B" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                            </UniformGrid>
-
-                            <!-- Metrics & Engine Specs -->
-                            <TextBlock Text="Engine Status &amp; Metrics" Foreground="White" FontSize="15" FontWeight="Bold" Margin="0,0,0,12"/>
-                            <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="10" Padding="20">
-                                <UniformGrid Columns="3">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="INDEXED SIGNATURES" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                        <TextBlock x:Name="lblDashSigCount" Text="20,000" Foreground="#38BDF8" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
-                                    </StackPanel>
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="QUARANTINED THREATS" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                        <TextBlock x:Name="lblDashQuarantineCount" Text="0" Foreground="#F59E0B" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
-                                    </StackPanel>
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="MEMORY-MAPPED INDEX" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                        <TextBlock Text="ACTIVE (O(1))" Foreground="#10B981" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
-                                    </StackPanel>
-                                </UniformGrid>
-                            </Border>
-
-                            <!-- Drag & Drop Hint -->
-                            <TextBlock Text="💡 Tip: Drag and drop any file or .zip archive onto this window to instantly scan or audit." Foreground="#475569" FontSize="11" HorizontalAlignment="Center" Margin="0,25,0,0"/>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-
-                <!-- 2. SCAN PROGRESS VIEW -->
-                <Grid x:Name="ScanView" Visibility="Collapsed" Background="#0B0F19">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <!-- Radar Sweep Ring -->
-                        <Grid Width="220" Height="220">
-                            <Canvas x:Name="DotRingCanvas" Width="220" Height="220"/>
-                            <Grid x:Name="ScannerNode" RenderTransformOrigin="0.5,0.5">
-                                <Grid.RenderTransform>
-                                    <RotateTransform x:Name="ScannerRotation" Angle="0"/>
-                                </Grid.RenderTransform>
-                                <Ellipse Width="12" Height="12" Fill="#38BDF8" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,2,0,0">
-                                    <Ellipse.Effect>
-                                        <BlurEffect Radius="15"/>
-                                    </Ellipse.Effect>
-                                </Ellipse>
-                                <Ellipse Width="6" Height="6" Fill="#38BDF8" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,5,0,0"/>
-                            </Grid>
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <TextBlock x:Name="txtScanPercent" Text="0%" Foreground="White" FontSize="36" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="SCANNING" Foreground="#38BDF8" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Clean Path Ticker (Without debug clutter) -->
-                        <TextBlock x:Name="txtScanPath" Text="Initiating secure scan..." Foreground="#94A3B8" FontSize="12" Margin="0,30,0,0" Width="550" TextAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontFamily="Segoe UI"/>
-
-                        <!-- Counters Summary -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,25,0,0">
-                            <StackPanel Margin="20,0">
-                                <TextBlock Text="SCANNED" Foreground="#64748B" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="lblScannedCount" Text="0" Foreground="White" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Margin="20,0">
-                                <TextBlock Text="THREATS" Foreground="#64748B" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="lblThreatsCount" Text="0" Foreground="#F43F5E" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <StackPanel Margin="20,0">
-                                <TextBlock Text="QUARANTINED" Foreground="#64748B" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                <TextBlock x:Name="lblQuarantinedCount" Text="0" Foreground="#F59E0B" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </StackPanel>
-
-                        <!-- Abort Button -->
-                        <Button Content="ABORT SCAN" Click="CancelScan_Click" Margin="0,35,0,0" Width="140" Height="36" Style="{StaticResource DangerButtonStyle}"/>
-                    </StackPanel>
-                </Grid>
-
-                <!-- 3. SCAN SUMMARY VIEW -->
-                <Grid x:Name="ScanSummaryView" Visibility="Collapsed" Background="#0B0F19">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="Scan Completed" Foreground="White" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Detailed verdict summary from C++ detection engine" Foreground="#64748B" FontSize="12" HorizontalAlignment="Center" Margin="0,5,0,30"/>
-
-                        <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="12" Padding="35,25" Width="500">
-                            <UniformGrid Columns="3">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="SAFE FILES" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock x:Name="countSafe" Text="0" Foreground="#10B981" FontSize="26" FontWeight="Bold" Margin="0,6,0,0"/>
-                                </StackPanel>
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="MALICIOUS" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock x:Name="countMalicious" Text="0" Foreground="#F43F5E" FontSize="26" FontWeight="Bold" Margin="0,6,0,0"/>
-                                </StackPanel>
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="QUARANTINED" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock x:Name="countQuarantined" Text="0" Foreground="#38BDF8" FontSize="26" FontWeight="Bold" Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </UniformGrid>
-                        </Border>
-
-                        <Button Content="BACK TO DASHBOARD" Height="40" Width="180" Style="{StaticResource PrimaryButtonStyle}" Margin="0,30,0,0" Click="SummaryDone_Click"/>
-                    </StackPanel>
-                </Grid>
-
-                <!-- 4. QUARANTINE VAULT VIEW -->
-                <Grid x:Name="QuarantineView" Visibility="Collapsed" Margin="30">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Margin="0,0,0,20">
-                        <TextBlock Text="Quarantine Containment Vault" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                        <TextBlock Text="Isolated threats encrypted with AES-256-GCM and DPAPI master keys." Foreground="#64748B" FontSize="12" Margin="0,3,0,0"/>
-                    </StackPanel>
-
-                    <Border Grid.Row="1" Background="#111827" CornerRadius="10" BorderBrush="#1F2937" BorderThickness="1">
-                        <Grid>
-                            <TextBlock x:Name="txtEmptyQuarantineMsg" Text="The quarantine vault is empty. Your system is safe." Foreground="#475569" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
-                            <DataGrid x:Name="dgQuarantine" Style="{StaticResource VantorDataGrid}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="FILE NAME" Binding="{Binding FileName}" Width="200"/>
-                                    <DataGridTextColumn Header="ORIGINAL PATH" Binding="{Binding OriginalPath}" Width="*"/>
-                                    <DataGridTextColumn Header="DATE" Binding="{Binding Date}" Width="160"/>
-                                    <DataGridTemplateColumn Header="ACTIONS" Width="160">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <Button Content="Restore" Click="ActionRestore_Click" Margin="0,0,8,0" Padding="12,5" Background="#1E293B" Foreground="#38BDF8" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand"/>
-                                                    <Button Content="Delete" Click="ActionDelete_Click" Padding="12,5" Background="#1E293B" Foreground="#F43F5E" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand"/>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
-                    </Border>
-                </Grid>
-
-                <!-- 5. ANTI-TAMPER AUDIT VIEW -->
-                <Grid x:Name="AntiTamperView" Visibility="Collapsed" Margin="30">
-                    <StackPanel>
-                        <TextBlock Text="User-Mode Anti-Tamper &amp; Integrity Audit" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                        <TextBlock Text="Runtime self-hash validation, code signing verification, and in-memory hook detection." Foreground="#64748B" FontSize="12" Margin="0,3,0,25"/>
-
-                        <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="12" Padding="25" Margin="0,0,0,20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,15">
-                                    <TextBlock Text="Security Baseline Status" Foreground="White" FontSize="15" FontWeight="Bold"/>
-                                    <Button Content="RUN INTEGRITY AUDIT NOW" HorizontalAlignment="Right" Style="{StaticResource PrimaryButtonStyle}" Click="BtnRunAntiTamperAudit_Click"/>
-                                </Grid>
-
-                                <StackPanel Margin="0,10,0,0">
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15,12" Margin="0,0,0,8">
-                                        <Grid>
-                                            <TextBlock Text="Authenticode Digital Signature Verification" Foreground="#E2E8F0" FontSize="12"/>
-                                            <TextBlock x:Name="lblAuditSig" Text="PASSED" Foreground="#10B981" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </Border>
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15,12" Margin="0,0,0,8">
-                                        <Grid>
-                                            <TextBlock Text="Runtime .text Section In-Memory Self-Hash" Foreground="#E2E8F0" FontSize="12"/>
-                                            <TextBlock x:Name="lblAuditTextHash" Text="INTACT" Foreground="#10B981" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </Border>
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15,12" Margin="0,0,0,8">
-                                        <Grid>
-                                            <TextBlock Text="Critical Win32 API Inline Hook Detection" Foreground="#E2E8F0" FontSize="12"/>
-                                            <TextBlock x:Name="lblAuditHooks" Text="CLEAN (No Hooks)" Foreground="#10B981" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </Border>
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15,12">
-                                        <Grid>
-                                            <TextBlock Text="Anti-Debugging &amp; Hardware Breakpoints (Dr0-Dr3)" Foreground="#E2E8F0" FontSize="12"/>
-                                            <TextBlock x:Name="lblAuditDebug" Text="SECURED" Foreground="#10B981" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right"/>
-                                        </Grid>
-                                    </Border>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock x:Name="txtAuditResult" Text="Click 'RUN INTEGRITY AUDIT NOW' to verify all protections live." Foreground="#94A3B8" FontSize="12"/>
-                    </StackPanel>
-                </Grid>
-
-                <!-- 6. ZIP-BOMB & ARCHIVE INSPECTOR VIEW -->
-                <Grid x:Name="ZipBombView" Visibility="Collapsed" Margin="30">
-                    <StackPanel>
-                        <TextBlock Text="Zip-Bomb &amp; Archive Security Auditor" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                        <TextBlock Text="Zero-decompression inspection of compression ratios, nested archives, and path traversals." Foreground="#64748B" FontSize="12" Margin="0,3,0,25"/>
-
-                        <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="12" Padding="25" Margin="0,0,0,20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,15">
-                                    <TextBlock Text="Archive Security Inspection" Foreground="White" FontSize="15" FontWeight="Bold"/>
-                                    <Button Content="CHOOSE ARCHIVE (.ZIP)..." HorizontalAlignment="Right" Style="{StaticResource PrimaryButtonStyle}" Click="BtnBrowseZip_Click"/>
-                                </Grid>
-
-                                <Border x:Name="cardZipResult" Background="#070A12" CornerRadius="8" Padding="20" Margin="0,10,0,0">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,10">
-                                            <TextBlock x:Name="lblZipFileName" Text="No archive selected" Foreground="White" FontWeight="Bold" FontSize="13"/>
-                                            <Border x:Name="badgeZipVerdict" Background="#1E293B" CornerRadius="4" Padding="8,3" HorizontalAlignment="Right">
-                                                <TextBlock x:Name="lblZipVerdict" Text="WAITING" Foreground="#94A3B8" FontWeight="Bold" FontSize="11"/>
-                                            </Border>
-                                        </Grid>
-
-                                        <Separator Background="#1E293B" Margin="0,5,0,12"/>
-
-                                        <UniformGrid Columns="3">
-                                            <StackPanel>
-                                                <TextBlock Text="COMPRESSION RATIO" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                                <TextBlock x:Name="lblZipRatio" Text="—" Foreground="#38BDF8" FontSize="16" FontWeight="Bold" Margin="0,3,0,0"/>
-                                            </StackPanel>
-                                            <StackPanel>
-                                                <TextBlock Text="UNCOMPRESSED SIZE" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                                <TextBlock x:Name="lblZipUncompSize" Text="—" Foreground="#E2E8F0" FontSize="16" FontWeight="Bold" Margin="0,3,0,0"/>
-                                            </StackPanel>
-                                            <StackPanel>
-                                                <TextBlock Text="TOTAL ENTRIES" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                                <TextBlock x:Name="lblZipEntries" Text="—" Foreground="#E2E8F0" FontSize="16" FontWeight="Bold" Margin="0,3,0,0"/>
-                                            </StackPanel>
-                                        </UniformGrid>
-
-                                        <TextBlock x:Name="lblZipReason" Text="Select an archive above to run zero-decompression safety evaluation." Foreground="#94A3B8" FontSize="12" Margin="0,15,0,0" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Grid>
-
-                <!-- 7. THREAT SIGNATURES VIEW -->
-                <Grid x:Name="SignaturesView" Visibility="Collapsed" Margin="30">
-                    <StackPanel>
-                        <TextBlock Text="Threat Signatures Database" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                        <TextBlock Text="High-speed SQLite store coupled with a 128 KB Bloom filter and memory-mapped binary index." Foreground="#64748B" FontSize="12" Margin="0,3,0,25"/>
-
-                        <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="12" Padding="25" Margin="0,0,0,20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,15">
-                                    <TextBlock Text="Signature Database Stats" Foreground="White" FontSize="15" FontWeight="Bold"/>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <Button Content="IMPORT HASHES (.TXT)..." Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,10,0" Click="BtnImportHashes_Click"/>
-                                        <Button Content="CHECK FOR UPDATES" Style="{StaticResource CardStyle}" Padding="14,6" Foreground="#38BDF8" Click="BtnUpdateSignatures_Click"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <UniformGrid Columns="3" Margin="0,15,0,15">
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15">
-                                        <StackPanel>
-                                            <TextBlock Text="TOTAL INDEXED HASHES" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                            <TextBlock x:Name="lblSigTotalCount" Text="20,000" Foreground="#38BDF8" FontSize="22" FontWeight="Bold" Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15" Margin="10,0">
-                                        <StackPanel>
-                                            <TextBlock Text="LOOKUP THROUGHPUT" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                            <TextBlock Text="> 500,000 / sec" Foreground="#10B981" FontSize="22" FontWeight="Bold" Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Background="#070A12" CornerRadius="8" Padding="15">
-                                        <StackPanel>
-                                            <TextBlock Text="BLOOM FILTER REJECTION" Foreground="#64748B" FontSize="10" FontWeight="Bold"/>
-                                            <TextBlock Text="O(1) in &lt; 50 cycles" Foreground="#A7F3D0" FontSize="22" FontWeight="Bold" Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-                                </UniformGrid>
-
-                                <TextBlock x:Name="lblSigStatusMsg" Text="Signature database is current and verified against memory-mapped index." Foreground="#94A3B8" FontSize="12"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Grid>
-
-                <!-- 8. SECURITY SETTINGS VIEW -->
-                <Grid x:Name="SettingsView" Visibility="Collapsed" Margin="30">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <TextBlock Text="Security &amp; Protection Settings" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                            <TextBlock Text="Configure real-time defenses, heuristics, and archive thresholds." Foreground="#64748B" FontSize="12" Margin="0,3,0,25"/>
-
-                            <Border Background="#111827" BorderBrush="#1F2937" BorderThickness="1" CornerRadius="12" Padding="25" Margin="0,0,0,20">
-                                <StackPanel>
-                                    <TextBlock Text="Active Defense Shields" Foreground="White" FontSize="15" FontWeight="Bold" Margin="0,0,0,15"/>
-
-                                    <CheckBox x:Name="chkRtp" Content="Real-Time Protection (Continuous Filesystem Monitoring)" Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold" IsChecked="True" Margin="0,0,0,12"/>
-                                    <CheckBox x:Name="chkAntiTamper" Content="User-Mode Anti-Tamper &amp; Self-Healing Watchdog" Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold" IsChecked="True" Margin="0,0,0,20"/>
-
-                                    <Separator Background="#1E293B" Margin="0,0,0,20"/>
-
-                                    <Grid Margin="0,0,0,8">
-                                        <TextBlock Text="Heuristic Sensitivity Threshold" Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="lblHeurVal" Text="75%" Foreground="#38BDF8" FontWeight="Bold" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Slider x:Name="sliderHeuristic" Minimum="50" Maximum="95" Value="75" ValueChanged="SliderHeuristic_ValueChanged" Margin="0,0,0,20"/>
-
-                                    <Grid Margin="0,0,0,8">
-                                        <TextBlock Text="Zip-Bomb Max Ratio Ceiling" Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="lblZipRatioVal" Text="10.0x" Foreground="#F59E0B" FontWeight="Bold" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                    <Slider x:Name="sliderZipRatio" Minimum="5" Maximum="50" Value="10" ValueChanged="SliderZipRatio_ValueChanged" Margin="0,0,0,20"/>
-
-                                    <Button Content="APPLY SETTINGS" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Width="150" Click="BtnSaveSettings_Click"/>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-
+            <!-- Right Dynamic Content Region -->
+            <Grid Grid.Row="1" Grid.Column="1" Background="{StaticResource BrushBgDeep}">
+                <ContentControl Content="{Binding CurrentViewModel}"/>
             </Grid>
         </Grid>
     </Border>
