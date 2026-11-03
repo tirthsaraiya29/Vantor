@@ -9,6 +9,8 @@ namespace Vantor
     /// </summary>
     public partial class App : System.Windows.Application
     {
+        private static bool _hasShownErrorDialog = false;
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
@@ -20,9 +22,18 @@ namespace Vantor
 
             DispatcherUnhandledException += (s, args) =>
             {
-                Debug.WriteLine($"[CRITICAL] Unhandled Dispatcher exception: {args.Exception.Message}");
+                Debug.WriteLine($"[CRITICAL] Unhandled Dispatcher exception: {args.Exception}");
                 args.Handled = true;
-                MessageBox.Show($"An unexpected UI error occurred: {args.Exception.Message}", "Vantor UI Alert", MessageBoxButton.OK, MessageBoxImage.Warning);
+
+                if (!_hasShownErrorDialog)
+                {
+                    _hasShownErrorDialog = true;
+                    MessageBox.Show(
+                        $"Vantor encountered a UI exception: {args.Exception.Message}",
+                        "Vantor UI Alert",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
             };
         }
     }
