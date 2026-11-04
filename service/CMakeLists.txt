@@ -11,6 +11,12 @@ set(SERVICE_SOURCES
     IPC.cpp
     AntiTamper.cpp
     RealTimeProtection.cpp
+    ProcessMemoryAuditor.cpp
+    PersistenceAuditor.cpp
+    ThreatClassifier.cpp
+    MLEngine.cpp
+    DetonationChamber.cpp
+    ScanHistoryStore.cpp
     ../backend/SignatureStore.cpp
 )
 
@@ -20,6 +26,12 @@ set(SERVICE_HEADERS
     IPC.h
     AntiTamper.h
     RealTimeProtection.h
+    ProcessMemoryAuditor.h
+    PersistenceAuditor.h
+    ThreatClassifier.h
+    MLEngine.h
+    DetonationChamber.h
+    ScanHistoryStore.h
     ../backend/SignatureStore.h
     ../common/Common.h
     ../common/Crypto.h

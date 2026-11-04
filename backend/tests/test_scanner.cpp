@@ -159,4 +159,5 @@ TEST(ScannerTests, RestorationPathTraversalPrevention) {
     EXPECT_FALSE(scanner.RestoreQuarantinedFile(qId, evilPath));
 
     SafeRemoveDir(testDir);
+    std::cout << "[DEBUG] Exiting RestorationPathTraversalPrevention\n" << std::flush;
 }

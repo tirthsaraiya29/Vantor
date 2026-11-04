@@ -1,8 +1,10 @@
 #pragma once
 
 #include "../common/NamedPipe.h"
+#include "Scanner.h"
 #include <memory>
 #include <string>
+#include <mutex>
 
 namespace vantor {
 namespace service {
@@ -24,6 +26,8 @@ private:
     ~ServiceIPC();
 
     std::unique_ptr<ipc::NamedPipeServer> server_;
+    scan::ScanProgressInfo lastProgress_;
+    std::mutex progressMutex_;
 };
 
 } // namespace service

@@ -7,6 +7,10 @@
 #include <unordered_set>
 #include <mutex>
 #include <vector>
+#include <deque>
+#include <condition_variable>
+
+struct sqlite3;
 
 namespace vantor {
 namespace scan {
@@ -42,7 +46,9 @@ public:
     ScanResult ScanSingleFile(const std::string& filePath, const std::string& sessionId = "MANUAL-001");
 
     // Quarantine management
-    bool QuarantineFile(const std::string& filePath, const std::string& sessionId, const std::string& sha256, const std::string& sha512);
+    bool QuarantineFile(const std::string& filePath, const std::string& sessionId = "RTP-SHIELD",
+                        const std::string& sha256 = "", const std::string& sha512 = "",
+                        const std::string& threatName = "MaliciousPayload");
     bool RestoreQuarantinedFile(int64_t recordId, const std::string& destinationPath = "");
     bool DeleteQuarantinedFile(int64_t recordId);
     std::vector<QuarantineEntry> GetQuarantineRecords();
@@ -56,7 +62,6 @@ private:
     ~Scanner();
 
     void ScanWorker(std::string scanType, std::string customPath, ProgressCallback progressCb);
-    void TraverseDirectory(const std::wstring& root, int& scanned, int& threats, int totalEst, ProgressCallback progressCb);
     int EstimateFileCount(const std::string& scanType, const std::string& customPath);
 
     std::string baseDir_;
@@ -67,6 +72,7 @@ private:
 
     std::mutex safeDbMutex_;
     std::mutex quarantineMutex_;
+    sqlite3* quarantineDb_{nullptr};
     std::unordered_set<std::string> inMemorySafeCache_;
 };
 

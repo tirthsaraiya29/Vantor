@@ -7,6 +7,9 @@ out/
 telemetry.jsonl
 test_*.db
 test_*.idx
+signatures.db
+signatures.idx
+*.idx
 
 # ============================================================
 # VANTOR - Repository Ignore Rules

@@ -2,6 +2,10 @@
 #include "Scanner.h"
 #include "ConfigManager.h"
 #include "AntiTamper.h"
+#include "RealTimeProtection.h"
+#include "ProcessMemoryAuditor.h"
+#include "PersistenceAuditor.h"
+#include "ScanHistoryStore.h"
 #include "../common/Logger.h"
 #include "../common/nlohmann/json.hpp"
 
@@ -9,9 +13,6 @@ using json = nlohmann::json;
 
 namespace vantor {
 namespace service {
-
-static scan::ScanProgressInfo g_lastProgress;
-static std::mutex g_progressMutex;
 
 ServiceIPC::ServiceIPC() {
     server_ = std::make_unique<ipc::NamedPipeServer>(IPC_PIPE_NAME);
@@ -52,19 +53,20 @@ std::string ServiceIPC::HandleRequest(const std::string& requestJson) {
             std::string path = req.value("path", "");
 
             {
-                std::lock_guard<std::mutex> lock(g_progressMutex);
-                g_lastProgress = scan::ScanProgressInfo();
-                g_lastProgress.sessionId = "INIT";
-                g_lastProgress.filesScanned = 0;
-                g_lastProgress.threatsDetected = 0;
-                g_lastProgress.currentFile = "Initializing scan pipeline...";
-                g_lastProgress.percentComplete = 0.0f;
-                g_lastProgress.isComplete = false;
+                std::lock_guard<std::mutex> lock(progressMutex_);
+                lastProgress_ = scan::ScanProgressInfo();
+                lastProgress_.sessionId = "INIT";
+                lastProgress_.filesScanned = 0;
+                lastProgress_.threatsDetected = 0;
+                lastProgress_.filesQuarantined = 0;
+                lastProgress_.currentFile = "Initializing scan pipeline...";
+                lastProgress_.percentComplete = 0.0f;
+                lastProgress_.isComplete = false;
             }
 
-            bool started = scan::Scanner::Instance().StartScan(type, path, [](const scan::ScanProgressInfo& info) {
-                std::lock_guard<std::mutex> lock(g_progressMutex);
-                g_lastProgress = info;
+            bool started = scan::Scanner::Instance().StartScan(type, path, [this](const scan::ScanProgressInfo& info) {
+                std::lock_guard<std::mutex> lock(progressMutex_);
+                lastProgress_ = info;
             });
 
             resp["started"] = started;
@@ -75,14 +77,16 @@ std::string ServiceIPC::HandleRequest(const std::string& requestJson) {
             resp["message"] = "Cancellation requested";
         }
         else if (cmd == "get_status") {
-            std::lock_guard<std::mutex> lock(g_progressMutex);
+            std::lock_guard<std::mutex> lock(progressMutex_);
             resp["is_scanning"] = scan::Scanner::Instance().IsScanning();
-            resp["session_id"] = g_lastProgress.sessionId;
-            resp["files_scanned"] = g_lastProgress.filesScanned;
-            resp["threats_detected"] = g_lastProgress.threatsDetected;
-            resp["current_file"] = g_lastProgress.currentFile;
-            resp["percent"] = g_lastProgress.percentComplete;
-            resp["is_complete"] = g_lastProgress.isComplete;
+            resp["session_id"] = lastProgress_.sessionId;
+            resp["files_scanned"] = lastProgress_.filesScanned;
+            resp["threats_detected"] = lastProgress_.threatsDetected;
+            resp["files_quarantined"] = lastProgress_.filesQuarantined;
+            resp["quarantined_count"] = lastProgress_.filesQuarantined;
+            resp["current_file"] = lastProgress_.currentFile;
+            resp["percent"] = lastProgress_.percentComplete;
+            resp["is_complete"] = lastProgress_.isComplete;
         }
         else if (cmd == "get_quarantine") {
             auto records = scan::Scanner::Instance().GetQuarantineRecords();
@@ -132,7 +136,25 @@ std::string ServiceIPC::HandleRequest(const std::string& requestJson) {
             resp["target"] = alert.affectedTarget;
             resp["mechanism"] = alert.detectionMechanism;
         }
+        else if (cmd == "get_rtp_telemetry") {
+            return rtp::RealTimeProtection::Instance().GetRtpTelemetryJson();
+        }
+        else if (cmd == "audit_memory") {
+            return audit::ProcessMemoryAuditor::Instance().AuditRunningProcessesJson();
+        }
+        else if (cmd == "audit_autoruns") {
+            return audit::PersistenceAuditor::Instance().AuditPersistenceJson();
+        }
+        else if (cmd == "get_scan_history") {
+            int limit = req.value("limit", 50);
+            return scan::ScanHistoryStore::Instance().GetRecentSessionsJson(limit);
+        }
+        else if (cmd == "get_session_threats") {
+            std::string sid = req.value("session_id", "");
+            return scan::ScanHistoryStore::Instance().GetSessionThreatsJson(sid);
+        }
         else {
+            LOG_WARN("IPC", "Unknown command received: " + cmd);
             resp["status"] = "error";
             resp["error"] = "Unknown command: " + cmd;
         }

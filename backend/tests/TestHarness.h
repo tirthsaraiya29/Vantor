@@ -77,7 +77,11 @@ inline int RunAllTests() {
 #define EXPECT_NE(a, b) if ((a) == (b)) throw std::runtime_error("EXPECT_NE failed: " #a " != " #b);
 #define EXPECT_GT(a, b) if (!((a) > (b))) throw std::runtime_error("EXPECT_GT failed: " #a " > " #b);
 #define EXPECT_LT(a, b) if (!((a) < (b))) throw std::runtime_error("EXPECT_LT failed: " #a " < " #b);
+#define EXPECT_GE(a, b) if (!((a) >= (b))) throw std::runtime_error("EXPECT_GE failed: " #a " >= " #b);
+#define EXPECT_LE(a, b) if (!((a) <= (b))) throw std::runtime_error("EXPECT_LE failed: " #a " <= " #b);
 #define ASSERT_TRUE(cond) EXPECT_TRUE(cond)
+#define ASSERT_NE(a, b) EXPECT_NE(a, b)
 #define ASSERT_FALSE(cond) EXPECT_FALSE(cond)
+#define ASSERT_EQ(a, b) EXPECT_EQ(a, b)
 
 #endif

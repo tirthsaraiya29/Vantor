@@ -25,6 +25,10 @@ private slots:
     void OnFilterChanged(const QString& text);
     void OnRestoreClicked();
     void OnDeleteClicked();
+    void OnDeleteAllClicked();
+    void OnExportCsvClicked();
+    void OnLookupVirusTotal();
+    void OnCustomContextMenuRequested(const QPoint& pos);
 
 private:
     void SetupUi();
@@ -34,6 +38,8 @@ private:
     QLineEdit* searchEdit_ = nullptr;
     QPushButton* restoreBtn_ = nullptr;
     QPushButton* deleteBtn_ = nullptr;
+    QPushButton* deleteAllBtn_ = nullptr;
+    QPushButton* exportCsvBtn_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QLabel* emptyLabel_ = nullptr;
 

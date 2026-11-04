@@ -1,11 +1,13 @@
 #include "SettingsDialog.h"
 #include "GrpcClient.h"
+#include "../backend/SignatureUpdater.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QUrl>
 
 namespace vantor {
 namespace ui {
@@ -154,11 +156,19 @@ void SettingsDialog::LoadSettings() {
 }
 
 void SettingsDialog::OnSaveClicked() {
+    // Minor 39: URL validation with QUrl::isValid() and HTTPS/HTTP check
+    QString urlStr = updateUrlEdit_->text().trimmed();
+    QUrl url(urlStr);
+    if (!urlStr.isEmpty() && (!url.isValid() || (url.scheme() != "https" && url.scheme() != "http"))) {
+        QMessageBox::warning(this, "Invalid Configuration", "Update Server URL must be a valid HTTP or HTTPS address.");
+        return;
+    }
+
     currentConfig_.rtpEnabled = rtpCheck_->isChecked();
     currentConfig_.antiTamperEnabled = antiTamperCheck_->isChecked();
     currentConfig_.heuristicThreshold = static_cast<double>(heurSlider_->value()) / 100.0;
     currentConfig_.zipBombRatioLimit = static_cast<double>(zipRatioSlider_->value());
-    currentConfig_.updateServerUrl = updateUrlEdit_->text().toStdString();
+    currentConfig_.updateServerUrl = urlStr.toStdString();
 
     currentConfig_.excludedPaths.clear();
     for (int i = 0; i < exclusionsList_->count(); ++i) {
@@ -189,23 +199,26 @@ void SettingsDialog::OnRemoveExclusion() {
 }
 
 void SettingsDialog::OnCheckUpdatesClicked() {
+    QString urlStr = updateUrlEdit_->text().trimmed();
+    QUrl url(urlStr);
+    if (!url.isValid() || (url.scheme() != "https" && url.scheme() != "http")) {
+        updateStatusLabel_->setText("Error: Enter a valid HTTP/HTTPS update URL.");
+        updateStatusLabel_->setStyleSheet("color: #ef4444; font-size: 11px;");
+        return;
+    }
+
     updateStatusLabel_->setText("Checking remote distribution endpoint...");
     updateStatusLabel_->setStyleSheet("color: #38bdf8; font-size: 11px;");
 
-    // Sample hash update sync
-    int added = 0;
-    std::vector<std::string> mockSignatures = {
-        "1111111111111111111111111111111111111111111111111111111111111111",
-        "2222222222222222222222222222222222222222222222222222222222222222"
-    };
-
-    bool ok = GrpcClient::Instance().TriggerSignatureUpdate(mockSignatures, added);
-    if (ok) {
-        updateStatusLabel_->setText(QString("Update complete: +%1 new threat signatures incorporated.").arg(added));
+    // Minor 33: Wire into SignatureUpdater actual pull
+    auto res = backend::SignatureUpdater::Instance().CheckAndUpdate(urlStr.toStdString());
+    if (res.success) {
+        updateStatusLabel_->setText(QString("Update complete: +%1 new threat signatures incorporated. Total: %2")
+                                        .arg(res.signaturesAdded).arg(res.totalSignatures));
         updateStatusLabel_->setStyleSheet("color: #10b981; font-size: 11px;");
     } else {
-        updateStatusLabel_->setText("Signature update check completed. Local database is current.");
-        updateStatusLabel_->setStyleSheet("color: #10b981; font-size: 11px;");
+        updateStatusLabel_->setText(QString("Update notice: %1").arg(QString::fromStdString(res.errorMessage)));
+        updateStatusLabel_->setStyleSheet("color: #f59e0b; font-size: 11px;");
     }
 }
 

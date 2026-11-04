@@ -22,6 +22,7 @@ if exist "C:\Program Files\CMake\bin\cmake.exe" (
     goto :cmake_found
 )
 echo [ERROR] CMake not found in PATH or C:\Program Files\CMake\bin.
+echo [HINT]  Install CMake via: winget install Kitware.CMake
 goto :error
 
 :cmake_found
@@ -34,6 +35,7 @@ if exist "C:\Program Files\dotnet\dotnet.exe" (
     goto :dotnet_found
 )
 echo [ERROR] .NET SDK (dotnet) not found in PATH or C:\Program Files\dotnet.
+echo [HINT]  Install .NET 10 SDK via: winget install Microsoft.DotNet.SDK.10
 goto :error
 
 :dotnet_found

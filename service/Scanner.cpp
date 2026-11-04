@@ -1,8 +1,13 @@
 #include "Scanner.h"
 #include "ConfigManager.h"
+#include "ThreatClassifier.h"
+#include "MLEngine.h"
+#include "DetonationChamber.h"
+#include "ScanHistoryStore.h"
 #include "../backend/SignatureStore.h"
 #include "../common/Crypto.h"
 #include "../common/Logger.h"
+#include "../common/AuthenticodeVerifier.h"
 #include "../common/sqlite3.h"
 
 #include <shlobj.h>
@@ -13,6 +18,9 @@
 #include <thread>
 #include <cmath>
 #include <algorithm>
+#include <deque>
+#include <queue>
+#include <condition_variable>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "shell32.lib")
@@ -22,7 +30,6 @@ namespace fs = std::filesystem;
 namespace vantor {
 namespace scan {
 
-// Helper to calculate Shannon entropy
 static double CalculateBufferEntropy(const uint8_t* data, size_t size) {
     if (size == 0) return 0.0;
     size_t freq[256] = { 0 };
@@ -37,7 +44,7 @@ static double CalculateBufferEntropy(const uint8_t* data, size_t size) {
             entropy -= p * std::log2(p);
         }
     }
-    return entropy; // 0.0 to 8.0
+    return entropy;
 }
 
 Scanner::Scanner() {
@@ -47,6 +54,11 @@ Scanner::Scanner() {
 
 Scanner::~Scanner() {
     CancelScan();
+    std::lock_guard<std::mutex> lock(quarantineMutex_);
+    if (quarantineDb_) {
+        sqlite3_close(quarantineDb_);
+        quarantineDb_ = nullptr;
+    }
 }
 
 bool Scanner::Initialize(const std::string& baseDir) {
@@ -60,23 +72,31 @@ bool Scanner::Initialize(const std::string& baseDir) {
     std::error_code ec;
     fs::create_directories(quarantineDir_, ec);
 
-    // Initialize Quarantine Database
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
-    if (sqlite3_open(dbPath.c_str(), &db) == SQLITE_OK) {
-        const char* sql =
-            "CREATE TABLE IF NOT EXISTS quarantined_files ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "timestamp TEXT, "
-            "scan_id TEXT, "
-            "original_path TEXT, "
-            "encrypted_filename TEXT, "
-            "sha256 TEXT, "
-            "sha512 TEXT, "
-            "threat_name TEXT, "
-            "file_size INTEGER);";
-        sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
-        sqlite3_close(db);
+    // Initialize Quarantine Database with persistent handle and WAL mode (Minor 9)
+    {
+        std::lock_guard<std::mutex> lock(quarantineMutex_);
+        if (quarantineDb_) {
+            sqlite3_close(quarantineDb_);
+            quarantineDb_ = nullptr;
+        }
+        std::string dbPath = quarantineDir_ + "/quarantine.db";
+        if (sqlite3_open(dbPath.c_str(), &quarantineDb_) == SQLITE_OK) {
+            sqlite3_exec(quarantineDb_, "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
+            const char* sql =
+                "CREATE TABLE IF NOT EXISTS quarantined_files ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "timestamp TEXT, "
+                "scan_id TEXT, "
+                "original_path TEXT, "
+                "encrypted_filename TEXT, "
+                "sha256 TEXT, "
+                "sha512 TEXT, "
+                "threat_name TEXT, "
+                "file_size INTEGER);";
+            sqlite3_exec(quarantineDb_, sql, nullptr, nullptr, nullptr);
+        } else {
+            LOG_ERROR("Scanner", "Failed to open quarantine SQLite database.");
+        }
     }
 
     // Initialize SignatureStore using absolute paths in baseDir if present
@@ -86,66 +106,55 @@ bool Scanner::Initialize(const std::string& baseDir) {
         backend::SignatureStore::Instance().Initialize(sigDbPath, sigIdxPath);
     }
 
-    LOG_INFO("Scanner", "Scanner engine initialized. Quarantine & Signature storage ready.");
+    // Initialize AI/ML, Threat Family Classifier, and Scan History Store
+    ThreatClassifier::Instance().Initialize(baseDir_);
+    MLEngine::Instance().Initialize(baseDir_);
+    ScanHistoryStore::Instance().Initialize(baseDir_);
+
+    LOG_INFO("Scanner", "Scanner engine initialized with multi-layer heuristics, XGBoost ML, and scan history.");
     return true;
 }
 
 bool Scanner::VerifyAuthenticode(const std::wstring& filePath) {
-    if (!fs::exists(filePath)) return false;
-
-    WINTRUST_FILE_INFO fileInfo{};
-    fileInfo.cbStruct = sizeof(fileInfo);
-    fileInfo.pcwszFilePath = filePath.c_str();
-
-    WINTRUST_DATA trustData{};
-    trustData.cbStruct = sizeof(trustData);
-    trustData.dwUIChoice = WTD_UI_NONE;
-    trustData.fdwRevocationChecks = WTD_REVOKE_NONE;
-    trustData.dwUnionChoice = WTD_CHOICE_FILE;
-    trustData.pFile = &fileInfo;
-    trustData.dwStateAction = WTD_STATEACTION_VERIFY;
-    trustData.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
-
-    GUID policyGuid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-    LONG status = WinVerifyTrust(nullptr, &policyGuid, &trustData);
-
-    trustData.dwStateAction = WTD_STATEACTION_CLOSE;
-    WinVerifyTrust(nullptr, &policyGuid, &trustData);
-
-    return (status == ERROR_SUCCESS);
+    return authenticode::VerifyAuthenticodeSignature(filePath);
 }
 
 double Scanner::CalculateHeuristicScore(const std::string& filePath, const std::vector<uint8_t>& peBuf) {
-    int points = 0;
+    int riskPoints = 0;
+    bool isTrustedSigned = false;
 
-    // 1. Digital Signature Filter (Strongest FP mitigation)
+    // 1. Digital Signature Filter (FP mitigation)
     if (VerifyAuthenticode(Utf8ToUtf16(filePath))) {
-        points -= 60; // Trusted signed binaries get massive point reduction
+        isTrustedSigned = true;
     } else {
-        points += 20; // Unsigned executable
+        riskPoints += 20; // Unsigned executable
     }
 
-    // 2. Contextual Path Risks (only in user temp, downloads, appdata)
+    // 2. Contextual Path Risks (Temp, AppData, Downloads)
     std::string lowerPath = ToLower(NormalizePathSeparators(filePath));
     if (lowerPath.find("\\temp\\") != std::string::npos ||
         lowerPath.find("\\appdata\\") != std::string::npos ||
         lowerPath.find("\\downloads\\") != std::string::npos) {
-        points += 15;
+        riskPoints += 15;
     }
 
-    // 3. Double Extension checks on filename ONLY (e.g., malware.pdf.exe)
+    // 3. Double Extension checks on filename ONLY (Minor 7)
     std::string filename = ToLower(fs::path(filePath).filename().string());
-    if (filename.ends_with(".exe") || filename.ends_with(".scr") || filename.ends_with(".com")) {
-        if (filename.find(".pdf.") != std::string::npos ||
-            filename.find(".docx.") != std::string::npos ||
-            filename.find(".txt.") != std::string::npos ||
-            filename.find(".jpg.") != std::string::npos ||
-            filename.find(".xlsx.") != std::string::npos) {
-            points += 50;
+    if (filename.ends_with(".exe") || filename.ends_with(".scr") ||
+        filename.ends_with(".com") || filename.ends_with(".pif") || filename.ends_with(".cpl")) {
+        static const std::vector<std::string> deceptiveExtensions = {
+            ".pdf.", ".docx.", ".doc.", ".txt.", ".jpg.", ".png.",
+            ".xlsx.", ".xls.", ".mp3.", ".mp4.", ".ppt.", ".pptx.", ".zip.", ".rar."
+        };
+        for (const auto& deceptive : deceptiveExtensions) {
+            if (filename.find(deceptive) != std::string::npos) {
+                riskPoints += 50;
+                break;
+            }
         }
     }
 
-    // 4. PE Header structural parsing
+    // 4. PE Header structural parsing & Major 12: Import Directory API scoring
     if (peBuf.size() >= sizeof(IMAGE_DOS_HEADER)) {
         auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(peBuf.data());
         if (dos->e_magic == IMAGE_DOS_SIGNATURE && dos->e_lfanew > 0 &&
@@ -158,19 +167,21 @@ double Scanner::CalculateHeuristicScore(const std::string& filePath, const std::
                 WORD numSections = fileHdr->NumberOfSections;
                 WORD sizeOfOptHdr = fileHdr->SizeOfOptionalHeader;
 
-                if (numSections > 12) points += 15;
-                if (numSections == 0) points += 35;
+                if (numSections > 12) riskPoints += 15;
+                if (numSections == 0) riskPoints += 35;
 
                 size_t optHdrOffset = static_cast<size_t>(dos->e_lfanew) + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER);
                 size_t sectionHdrOffset = optHdrOffset + sizeOfOptHdr;
 
                 bool hasWxSection = false;
+                std::vector<IMAGE_SECTION_HEADER> sections;
                 if (sectionHdrOffset <= peBuf.size()) {
                     for (WORD i = 0; i < numSections; ++i) {
                         size_t curOffset = sectionHdrOffset + (i * sizeof(IMAGE_SECTION_HEADER));
                         if (curOffset + sizeof(IMAGE_SECTION_HEADER) > peBuf.size()) break;
 
                         auto* sec = reinterpret_cast<const IMAGE_SECTION_HEADER*>(peBuf.data() + curOffset);
+                        sections.push_back(*sec);
 
                         if ((sec->Characteristics & IMAGE_SCN_MEM_WRITE) &&
                             (sec->Characteristics & IMAGE_SCN_MEM_EXECUTE)) {
@@ -185,22 +196,212 @@ double Scanner::CalculateHeuristicScore(const std::string& filePath, const std::
                             lowerSec.rfind(".aspack", 0) == 0 ||
                             lowerSec.rfind(".vmp", 0) == 0 ||
                             lowerSec.rfind(".themida", 0) == 0) {
-                            points += 30;
+                            riskPoints += 30;
                         }
                     }
                 }
 
-                if (hasWxSection) points += 40;
+                if (hasWxSection) riskPoints += 40;
 
                 double maxEntropy = CalculateBufferEntropy(peBuf.data(), peBuf.size());
                 if (maxEntropy > 7.4) {
-                    points += 25;
+                    riskPoints += 25;
+                }
+
+                // Major 12: PE Import Directory & Dangerous API Combination Reputation Scoring
+                if (optHdrOffset + sizeof(WORD) <= peBuf.size()) {
+                    WORD optMagic = *reinterpret_cast<const WORD*>(peBuf.data() + optHdrOffset);
+                    DWORD importRva = 0;
+                    DWORD importSize = 0;
+
+                    if (optMagic == IMAGE_NT_OPTIONAL_HDR32_MAGIC &&
+                        optHdrOffset + sizeof(IMAGE_OPTIONAL_HEADER32) <= peBuf.size()) {
+                        auto* opt32 = reinterpret_cast<const IMAGE_OPTIONAL_HEADER32*>(peBuf.data() + optHdrOffset);
+                        if (opt32->NumberOfRvaAndSizes > IMAGE_DIRECTORY_ENTRY_IMPORT) {
+                            importRva = opt32->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
+                            importSize = opt32->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+                        }
+                    } else if (optMagic == IMAGE_NT_OPTIONAL_HDR64_MAGIC &&
+                               optHdrOffset + sizeof(IMAGE_OPTIONAL_HEADER64) <= peBuf.size()) {
+                        auto* opt64 = reinterpret_cast<const IMAGE_OPTIONAL_HEADER64*>(peBuf.data() + optHdrOffset);
+                        if (opt64->NumberOfRvaAndSizes > IMAGE_DIRECTORY_ENTRY_IMPORT) {
+                            importRva = opt64->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
+                            importSize = opt64->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+                        }
+                    }
+
+                    if (importRva > 0 && importSize > 0) {
+                        auto RvaToOffset = [&](DWORD rva) -> size_t {
+                            for (const auto& sec : sections) {
+                                if (rva >= sec.VirtualAddress &&
+                                    rva < sec.VirtualAddress + sec.Misc.VirtualSize) {
+                                    return static_cast<size_t>(sec.PointerToRawData + (rva - sec.VirtualAddress));
+                                }
+                            }
+                            return 0;
+                        };
+
+                        size_t impOffset = RvaToOffset(importRva);
+                        if (impOffset > 0 && impOffset + sizeof(IMAGE_IMPORT_DESCRIPTOR) <= peBuf.size()) {
+                            std::unordered_set<std::string> importedApis;
+                            size_t curImp = impOffset;
+
+                            while (curImp + sizeof(IMAGE_IMPORT_DESCRIPTOR) <= peBuf.size()) {
+                                auto* desc = reinterpret_cast<const IMAGE_IMPORT_DESCRIPTOR*>(peBuf.data() + curImp);
+                                if (desc->Name == 0 && desc->FirstThunk == 0) break;
+
+                                DWORD thunkRva = desc->OriginalFirstThunk ? desc->OriginalFirstThunk : desc->FirstThunk;
+                                size_t thunkOffset = RvaToOffset(thunkRva);
+
+                                if (thunkOffset > 0) {
+                                    size_t curThunk = thunkOffset;
+                                    bool is64 = (optMagic == IMAGE_NT_OPTIONAL_HDR64_MAGIC);
+                                    size_t step = is64 ? sizeof(uint64_t) : sizeof(uint32_t);
+
+                                    for (int count = 0; count < 100 && curThunk + step <= peBuf.size(); ++count, curThunk += step) {
+                                        uint64_t val = is64 ? *reinterpret_cast<const uint64_t*>(peBuf.data() + curThunk)
+                                                            : *reinterpret_cast<const uint32_t*>(peBuf.data() + curThunk);
+                                        if (val == 0) break;
+                                        bool isOrdinal = is64 ? (val & 0x8000000000000000ULL) : (val & 0x80000000);
+                                        if (!isOrdinal) {
+                                            DWORD nameRva = static_cast<DWORD>(val & 0xFFFFFFFF);
+                                            size_t nameOff = RvaToOffset(nameRva);
+                                            if (nameOff > 0 && nameOff + sizeof(WORD) + 1 < peBuf.size()) {
+                                                const char* apiName = reinterpret_cast<const char*>(peBuf.data() + nameOff + sizeof(WORD));
+                                                size_t apiLen = strnlen(apiName, 64);
+                                                std::string nameLower(apiName, apiLen);
+                                                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), [](unsigned char c) {
+                                                    return static_cast<char>(std::tolower(c));
+                                                });
+                                                importedApis.insert(nameLower);
+                                            }
+                                        }
+                                    }
+                                }
+                                curImp += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+                            }
+
+                            // 1. Process Injection & Remote Code Execution (+40)
+                            bool hasAlloc = (importedApis.count("virtualalloc") || importedApis.count("virtualallocex") || importedApis.count("zwallocatevirtualmemory"));
+                            bool hasWrite = (importedApis.count("writeprocessmemory") || importedApis.count("ntwritevirtualmemory"));
+                            bool hasThread = (importedApis.count("createremotethread") || importedApis.count("ntcreatethreadex") || importedApis.count("queueuserapc") || importedApis.count("setthreadcontext"));
+                            if (hasAlloc && hasWrite && hasThread) {
+                                riskPoints += 40;
+                            }
+
+                            // 2. Anti-Debugging & Evasion (+15)
+                            bool hasDebug = (importedApis.count("isdebuggerpresent") || importedApis.count("checkremotedebuggerpresent"));
+                            bool hasNtSet = (importedApis.count("ntsetinformationthread") || importedApis.count("ntqueryinformationprocess"));
+                            if (hasDebug && hasNtSet) {
+                                riskPoints += 15;
+                            }
+
+                            // 3. Persistence Installation (+20)
+                            bool hasReg = (importedApis.count("regsetvalueexa") || importedApis.count("regsetvalueexw") || importedApis.count("regcreatekeyexa") || importedApis.count("regcreatekeyexw"));
+                            bool hasSvc = (importedApis.count("createservicew") || importedApis.count("createservicea") || importedApis.count("openscmanagerw"));
+                            if (hasReg || hasSvc) {
+                                riskPoints += 20;
+                            }
+
+                            // 4. Ransomware Encryption & Mass File Enumeration (+35)
+                            bool hasCrypt = (importedApis.count("cryptencrypt") || importedApis.count("bcryptexportkey") || importedApis.count("cryptgenrandom") || importedApis.count("cryptacquirecontexta") || importedApis.count("cryptacquirecontextw"));
+                            bool hasFileFind = (importedApis.count("findfirstfilew") || importedApis.count("findnextfilew") || importedApis.count("findfirstfilea") || importedApis.count("findfirstfileexw"));
+                            if (hasCrypt && hasFileFind) {
+                                riskPoints += 35;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    double score = static_cast<double>(points) / 100.0;
+    // 5. Script & LOLBIN Obfuscation Heuristics (Minor 6: full script read up to 4 MB)
+    std::string lowerExt = ToLower(fs::path(filePath).extension().string());
+    if (lowerExt == ".ps1" || lowerExt == ".bat" || lowerExt == ".cmd" ||
+        lowerExt == ".vbs" || lowerExt == ".js"  || lowerExt == ".hta") {
+
+        std::string scriptContent;
+        std::error_code ec;
+        uint64_t sz = fs::file_size(filePath, ec);
+        if (!ec && sz > 0 && sz <= 4ULL * 1024ULL * 1024ULL) {
+            std::ifstream sf(filePath, std::ios::binary);
+            if (sf) {
+                scriptContent.assign((std::istreambuf_iterator<char>(sf)), {});
+            }
+        }
+        if (scriptContent.empty() && !peBuf.empty()) {
+            scriptContent.assign(reinterpret_cast<const char*>(peBuf.data()), peBuf.size());
+        }
+
+        std::string lowerScript = ToLower(scriptContent);
+
+        // Dynamic download cradles
+        bool hasDownload = (
+            lowerScript.find("downloadstring") != std::string::npos ||
+            lowerScript.find("downloadfile") != std::string::npos ||
+            lowerScript.find("invoke-webrequest") != std::string::npos ||
+            lowerScript.find("iwr ") != std::string::npos ||
+            (lowerScript.find("certutil") != std::string::npos &&
+             (lowerScript.find("-urlcache") != std::string::npos || lowerScript.find("-split") != std::string::npos)) ||
+            (lowerScript.find("bitsadmin") != std::string::npos && lowerScript.find("/transfer") != std::string::npos) ||
+            lowerScript.find("msxml2.xmlhttp") != std::string::npos ||
+            lowerScript.find("winhttp.winhttprequest") != std::string::npos
+        );
+
+        // Dynamic execution / hidden process cradles
+        bool hasExec = (
+            lowerScript.find("invoke-expression") != std::string::npos ||
+            lowerScript.find("iex(") != std::string::npos ||
+            lowerScript.find("iex ") != std::string::npos ||
+            lowerScript.find("-windowstyle hidden") != std::string::npos ||
+            lowerScript.find("-w hidden") != std::string::npos ||
+            lowerScript.find("-ep bypass") != std::string::npos ||
+            lowerScript.find("-executionpolicy bypass") != std::string::npos ||
+            (lowerScript.find("wscript.shell") != std::string::npos && lowerScript.find(".run") != std::string::npos)
+        );
+
+        // Base64 payload encoding & multi-layer obfuscation
+        bool hasBase64 = (
+            lowerScript.find("frombase64string") != std::string::npos ||
+            lowerScript.find("-encodedcommand") != std::string::npos ||
+            lowerScript.find("-enc ") != std::string::npos ||
+            lowerScript.find("frombase64transform") != std::string::npos ||
+            (lowerScript.find("certutil") != std::string::npos && lowerScript.find("-decode") != std::string::npos)
+        );
+
+        // LOLBIN Weaponization
+        bool hasLolbin = (
+            (lowerScript.find("mshta") != std::string::npos && lowerScript.find("http") != std::string::npos) ||
+            (lowerScript.find("regsvr32") != std::string::npos && lowerScript.find("/i:http") != std::string::npos) ||
+            (lowerScript.find("rundll32") != std::string::npos && lowerScript.find("javascript:") != std::string::npos)
+        );
+
+        if (hasDownload && (hasExec || hasBase64)) {
+            riskPoints += 75;
+        } else if (hasBase64 && hasExec) {
+            riskPoints += 65;
+        } else if (hasLolbin) {
+            riskPoints += 70;
+        } else if (hasDownload) {
+            riskPoints += 35;
+        } else if (hasBase64) {
+            riskPoints += 30;
+        }
+
+        size_t carets = std::count(scriptContent.begin(), scriptContent.end(), '^');
+        size_t backticks = std::count(scriptContent.begin(), scriptContent.end(), '`');
+        if (carets > 20 || backticks > 20) {
+            riskPoints += 40;
+        }
+    }
+
+    // Apply digital signature trust discount (Minor 8: never underflows negative)
+    if (isTrustedSigned) {
+        riskPoints = (std::max)(0, riskPoints - 60);
+    }
+
+    double score = static_cast<double>(riskPoints) / 100.0;
     return std::clamp(score, 0.0, 1.0);
 }
 
@@ -226,7 +427,7 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
         return result;
     }
 
-    // 2. Fast Safe DB Cache Check
+    // 2. Fast Safe DB Cache Check (Minor 3: Safe verdict for verified cached files)
     {
         std::lock_guard<std::mutex> lock(safeDbMutex_);
         if (inMemorySafeCache_.count(result.sha512) > 0) {
@@ -235,13 +436,13 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
         }
     }
 
-    // 3. High-Speed Signature Lookup via Bloom Filter & Memory-Mapped Index (< 1 microsecond)
+    // 3. High-Speed Signature Lookup via Bloom Filter & Memory-Mapped Index
     if (backend::SignatureStore::Instance().Contains(result.sha256)) {
         result.signatureHit = true;
         result.threatDescription = "Trojan.Win32.KnownSignature";
     }
 
-    // 4. Read initial 64 KB for PE header inspection
+    // 4. Read initial 64 KB for PE header & signature inspection
     std::vector<uint8_t> headerBuf(64 * 1024);
     size_t bytesRead = 0;
     std::ifstream f(filePath, std::ios::binary);
@@ -251,25 +452,75 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
         headerBuf.resize(bytesRead);
     }
 
-    // 5. Compute Heuristics
+    // 5. Heuristic & ML Inference (Major 3 & Major 12)
     result.heuristicScore = CalculateHeuristicScore(filePath, headerBuf);
-    result.finalScore = result.heuristicScore;
+    result.mlScore = MLEngine::Instance().PredictMLScore(filePath, headerBuf.data(), headerBuf.size());
+    result.finalScore = MLEngine::Instance().BlendScores(result.heuristicScore, result.mlScore);
 
-    // 6. Verdict Calculation
+    // 6. Threat Family Classification (Major 16)
+    std::string familyName = ThreatClassifier::Instance().ClassifyThreat(filePath, headerBuf.data(), headerBuf.size());
+    if (!familyName.empty()) {
+        result.threatDescription = familyName;
+    }
+
+    // 7. Sandboxed Detonation Chamber for borderline executables (Major 10)
     double threshold = config::ConfigManager::Instance().GetConfig().heuristicThreshold;
+    std::string ext = ToLower(fs::path(filePath).extension().string());
+    if (result.finalScore >= 0.50 && result.finalScore < threshold && (ext == ".exe" || ext == ".scr" || ext == ".com")) {
+        auto detRep = DetonationChamber::Instance().DetonateSample(filePath, 4000);
+        if (detRep.anomalousBehavior) {
+            result.finalScore = (std::max)(result.finalScore, threshold + 0.10);
+            if (result.threatDescription.empty()) {
+                result.threatDescription = "Dynamic.DetonationAnomaly";
+            }
+        }
+    }
+
+    // 8. Verdict Determination & Policy Engine (Major 13)
     if (result.signatureHit || result.finalScore >= threshold) {
         result.verdict = ScanVerdict::Malicious;
         if (result.threatDescription.empty()) {
-            result.threatDescription = "Heuristic.HighRiskPayload";
+            if (ext == ".ps1" || ext == ".bat" || ext == ".cmd" || ext == ".vbs" || ext == ".js") {
+                result.threatDescription = "Heuristic.Script.MaliciousCradle";
+            } else {
+                result.threatDescription = "Heuristic.HighRiskPayload";
+            }
         }
-        // Auto-quarantine
-        QuarantineFile(filePath, sessionId, result.sha256, result.sha512);
+
+        // Evaluate Policy Action
+        PolicyAction action = config::ConfigManager::Instance().EvaluatePolicy(result);
+        if (action == PolicyAction::Allow) {
+            result.verdict = ScanVerdict::Safe;
+        } else {
+            if (action == PolicyAction::Quarantine || action == PolicyAction::Block) {
+                QuarantineFile(filePath, sessionId, result.sha256, result.sha512, result.threatDescription);
+            }
+            ScanHistoryStore::Instance().RecordThreat(
+                sessionId, filePath, result.threatDescription,
+                VerdictToString(result.verdict), PolicyActionToString(action), result.sha256
+            );
+        }
     } else if (result.finalScore >= 0.50) {
         result.verdict = ScanVerdict::Suspicious;
-        result.threatDescription = "Suspicious.LowConfidenceIndicator";
+        if (result.threatDescription.empty()) {
+            result.threatDescription = "Suspicious.LowConfidenceIndicator";
+        }
+        PolicyAction action = config::ConfigManager::Instance().EvaluatePolicy(result);
+        if (action == PolicyAction::Allow) {
+            result.verdict = ScanVerdict::Safe;
+        } else {
+            ScanHistoryStore::Instance().RecordThreat(
+                sessionId, filePath, result.threatDescription,
+                VerdictToString(result.verdict), PolicyActionToString(action), result.sha256
+            );
+        }
     } else {
         result.verdict = ScanVerdict::Clean;
+        // Minor 4: In-memory safe cache capped at 50,000 entries
         std::lock_guard<std::mutex> lock(safeDbMutex_);
+        if (inMemorySafeCache_.size() >= 50000) {
+            inMemorySafeCache_.clear();
+        }
         inMemorySafeCache_.insert(result.sha512);
     }
 
@@ -277,8 +528,15 @@ ScanResult Scanner::ScanSingleFile(const std::string& filePath, const std::strin
 }
 
 bool Scanner::QuarantineFile(const std::string& filePath, const std::string& sessionId,
-                             const std::string& sha256, const std::string& sha512) {
+                             const std::string& sha256In, const std::string& sha512In,
+                             const std::string& threatName) {
     std::lock_guard<std::mutex> lock(quarantineMutex_);
+
+    std::string sha256 = sha256In;
+    std::string sha512 = sha512In;
+    if (sha256.empty() || sha512.empty()) {
+        crypto::ComputeFileHashes(filePath, sha256, sha512);
+    }
 
     std::error_code ec;
     if (!fs::exists(filePath, ec) || !fs::is_regular_file(filePath, ec)) return false;
@@ -286,10 +544,9 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
     uint64_t fileSize = fs::file_size(filePath, ec);
     if (ec) return false;
 
-    // Safety limit: 512 MB ceiling for single-file quarantine to prevent unbounded RAM usage
     constexpr uint64_t MAX_QUARANTINE_BYTES = 512ULL * 1024ULL * 1024ULL;
     if (fileSize > MAX_QUARANTINE_BYTES) {
-        LOG_WARN("Scanner", "File too large for memory quarantine (" + std::to_string(fileSize) + " bytes): " + filePath);
+        LOG_WARN("Scanner", "File too large for quarantine (" + std::to_string(fileSize) + " bytes): " + filePath);
         return false;
     }
 
@@ -342,7 +599,8 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
 
     // 4. Save to quarantine directory with temporary file
     fs::path originalPath(filePath);
-    std::string encName = originalPath.filename().string() + "_" + sha256.substr(0, 8) + ".enc";
+    std::string hashSuffix = sha256.size() >= 8 ? sha256.substr(0, 8) : "vault";
+    std::string encName = originalPath.filename().string() + "_" + hashSuffix + ".enc";
     fs::path dstEnc = fs::path(quarantineDir_) / encName;
     fs::path dstTmp = fs::path(quarantineDir_) / (encName + ".tmp");
 
@@ -355,29 +613,30 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
     }
     out.close();
 
-    // Verify temp file exists and has correct size
     uint64_t expectedEncSize = iv.size() + tag.size() + ciphertext.size();
     if (fs::file_size(dstTmp, ec) != expectedEncSize) {
         fs::remove(dstTmp, ec);
         return false;
     }
 
-    // 5. Transactional insert into SQLite
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
-    if (sqlite3_open(dbPath.c_str(), &db) != SQLITE_OK) {
+    // 5. Transactional insert into SQLite using cached handle (Minor 9 & Minor 2)
+    if (!quarantineDb_) {
+        std::string dbPath = quarantineDir_ + "/quarantine.db";
+        sqlite3_open(dbPath.c_str(), &quarantineDb_);
+    }
+    if (!quarantineDb_) {
         fs::remove(dstTmp, ec);
         return false;
     }
 
     bool dbSuccess = false;
-    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    sqlite3_exec(quarantineDb_, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
     const char* sql = "INSERT INTO quarantined_files "
                       "(timestamp, scan_id, original_path, encrypted_filename, sha256, sha512, threat_name, file_size) "
                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(quarantineDb_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         std::string ts = NowUtcIso8601();
         sqlite3_bind_text(stmt, 1, ts.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, sessionId.c_str(), -1, SQLITE_TRANSIENT);
@@ -385,7 +644,8 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
         sqlite3_bind_text(stmt, 4, encName.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 5, sha256.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 6, sha512.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 7, "MaliciousPayload", -1, SQLITE_TRANSIENT);
+        std::string finalThreatName = threatName.empty() ? "MaliciousPayload" : threatName;
+        sqlite3_bind_text(stmt, 7, finalThreatName.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int64(stmt, 8, static_cast<sqlite3_int64>(data.size()));
         if (sqlite3_step(stmt) == SQLITE_DONE) {
             dbSuccess = true;
@@ -394,11 +654,10 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
     }
 
     if (dbSuccess) {
-        sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+        sqlite3_exec(quarantineDb_, "COMMIT;", nullptr, nullptr, nullptr);
     } else {
-        sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+        sqlite3_exec(quarantineDb_, "ROLLBACK;", nullptr, nullptr, nullptr);
     }
-    sqlite3_close(db);
 
     if (!dbSuccess) {
         fs::remove(dstTmp, ec);
@@ -413,7 +672,7 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
         fs::remove(dstTmp, ec);
     }
 
-    // 6. Only now delete the original file
+    // 6. Delete the original file
     fs::remove(filePath, ec);
     LOG_ALERT("Scanner", "Quarantined threat: " + filePath, "{\"sha256\":\"" + sha256 + "\"}");
     return true;
@@ -422,29 +681,38 @@ bool Scanner::QuarantineFile(const std::string& filePath, const std::string& ses
 std::vector<QuarantineEntry> Scanner::GetQuarantineRecords() {
     std::lock_guard<std::mutex> lock(quarantineMutex_);
     std::vector<QuarantineEntry> entries;
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
+    sqlite3* db = quarantineDb_;
+    bool needClose = false;
 
-    if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
-        const char* sql = "SELECT id, timestamp, scan_id, original_path, encrypted_filename, sha256, sha512, threat_name, file_size "
-                          "FROM quarantined_files ORDER BY id DESC;";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                QuarantineEntry e;
-                e.id = sqlite3_column_int64(stmt, 0);
-                e.timestamp = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-                e.scanId = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-                e.originalPath = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-                e.encryptedFilename = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-                e.sha256 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-                e.sha512 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-                e.threatName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7));
-                e.fileSizeBytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 8));
-                entries.push_back(e);
-            }
-            sqlite3_finalize(stmt);
+    if (!db) {
+        std::string dbPath = quarantineDir_ + "/quarantine.db";
+        if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+            return entries;
         }
+        needClose = true;
+    }
+
+    const char* sql = "SELECT id, timestamp, scan_id, original_path, encrypted_filename, sha256, sha512, threat_name, file_size "
+                      "FROM quarantined_files ORDER BY id DESC;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            QuarantineEntry e;
+            e.id = sqlite3_column_int64(stmt, 0);
+            e.timestamp = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            e.scanId = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            e.originalPath = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+            e.encryptedFilename = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+            e.sha256 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+            e.sha512 = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+            e.threatName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7));
+            e.fileSizeBytes = static_cast<uint64_t>(sqlite3_column_int64(stmt, 8));
+            entries.push_back(e);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (needClose) {
         sqlite3_close(db);
     }
     return entries;
@@ -452,15 +720,17 @@ std::vector<QuarantineEntry> Scanner::GetQuarantineRecords() {
 
 bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destinationPath) {
     std::lock_guard<std::mutex> lock(quarantineMutex_);
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
     std::string encName, origPath;
 
-    if (sqlite3_open(dbPath.c_str(), &db) != SQLITE_OK) return false;
+    if (!quarantineDb_) {
+        std::string dbPath = quarantineDir_ + "/quarantine.db";
+        sqlite3_open(dbPath.c_str(), &quarantineDb_);
+    }
+    if (!quarantineDb_) return false;
 
     const char* sql = "SELECT original_path, encrypted_filename FROM quarantined_files WHERE id = ? LIMIT 1;";
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(quarantineDb_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int64(stmt, 1, recordId);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             origPath = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
@@ -470,47 +740,50 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
     }
 
     if (encName.empty() || origPath.empty()) {
-        sqlite3_close(db);
         return false;
     }
 
-    // Determine target path and validate against path traversal
+    // Determine target path and validate against path traversal (Minor 10)
     std::string target = destinationPath.empty() ? origPath : destinationPath;
     if (target.find("..") != std::string::npos) {
-        sqlite3_close(db);
         LOG_ALERT("Scanner", "Path traversal detected in restore path: " + target, "{}");
         return false;
     }
 
-    fs::path targetPath(target);
     std::error_code ec;
+    fs::path canonTarget = fs::weakly_canonical(fs::path(target), ec);
+    std::string canonStr = ToLower(canonTarget.string());
 
-    // Handle collision: if target file already exists, avoid destroying unrelated files
-    if (fs::exists(targetPath, ec)) {
-        std::string stem = targetPath.stem().string();
-        std::string ext = targetPath.extension().string();
-        targetPath = targetPath.parent_path() / (stem + "_restored" + ext);
+    // Security boundary: disallow restoring directly into Windows core system directories
+    wchar_t winDir[MAX_PATH];
+    if (GetWindowsDirectoryW(winDir, MAX_PATH)) {
+        std::string winStr = ToLower(Utf16ToUtf8(winDir));
+        if (canonStr.find(winStr + "\\system32") == 0 || canonStr.find(winStr + "\\syswow64") == 0) {
+            LOG_ALERT("Scanner", "Path traversal / system overwrite blocked on restore: " + target, "{}");
+            return false;
+        }
     }
 
-    // Ensure parent directory exists
+    fs::path targetPath(target);
+    if (fs::exists(targetPath, ec)) {
+        std::string stem = targetPath.stem().string();
+        std::string fext = targetPath.extension().string();
+        targetPath = targetPath.parent_path() / (stem + "_restored" + fext);
+    }
+
     if (targetPath.has_parent_path()) {
         fs::create_directories(targetPath.parent_path(), ec);
     }
 
     fs::path srcEnc = fs::path(quarantineDir_) / encName;
     std::ifstream in(srcEnc, std::ios::binary);
-    if (!in) {
-        sqlite3_close(db);
-        return false;
-    }
+    if (!in) return false;
 
     std::vector<uint8_t> iv(12);
     std::vector<uint8_t> tag(16);
     in.read(reinterpret_cast<char*>(iv.data()), 12);
     in.read(reinterpret_cast<char*>(tag.data()), 16);
     if (in.gcount() != 16) {
-        in.close();
-        sqlite3_close(db);
         return false;
     }
 
@@ -519,16 +792,12 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
 
     fs::path keyPath = fs::path(quarantineDir_) / "master.key";
     std::ifstream keyIn(keyPath, std::ios::binary);
-    if (!keyIn) {
-        sqlite3_close(db);
-        return false;
-    }
+    if (!keyIn) return false;
     std::vector<uint8_t> encKey((std::istreambuf_iterator<char>(keyIn)), {});
     keyIn.close();
 
     std::vector<uint8_t> key;
     if (!crypto::DPAPIUnprotect(encKey, key) || key.size() != 32) {
-        sqlite3_close(db);
         return false;
     }
 
@@ -537,47 +806,24 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
     SecureZeroMemory(key.data(), key.size());
 
     if (!decOk) {
-        sqlite3_close(db);
-        LOG_ERROR("Scanner", "Decryption failed during restoration of: " + encName);
+        LOG_ERROR("Scanner", "AES256GCMDecrypt failed during quarantine restoration.");
         return false;
     }
 
-    // Write to temporary restoring file
-    fs::path tmpRestore = targetPath;
-    tmpRestore += L".restoring";
-
-    std::ofstream out(tmpRestore, std::ios::binary);
-    if (!out) {
-        sqlite3_close(db);
-        return false;
-    }
+    std::ofstream out(targetPath, std::ios::binary);
+    if (!out) return false;
     if (!plaintext.empty()) {
         out.write(reinterpret_cast<const char*>(plaintext.data()), plaintext.size());
     }
     out.close();
 
-    // Verify restored file size matches plaintext
-    if (fs::file_size(tmpRestore, ec) != plaintext.size()) {
-        fs::remove(tmpRestore, ec);
-        sqlite3_close(db);
-        return false;
-    }
-
-    // Rename .restoring to target
-    fs::rename(tmpRestore, targetPath, ec);
-    if (ec) {
-        fs::copy_file(tmpRestore, targetPath, fs::copy_options::overwrite_existing, ec);
-        fs::remove(tmpRestore, ec);
-    }
-
-    // Delete record from DB
+    // Remove entry from SQLite database
     const char* delSql = "DELETE FROM quarantined_files WHERE id = ?;";
-    if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(quarantineDb_, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int64(stmt, 1, recordId);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
-    sqlite3_close(db);
 
     fs::remove(srcEnc, ec);
     LOG_INFO("Scanner", "Restored quarantined file to: " + targetPath.string());
@@ -586,15 +832,16 @@ bool Scanner::RestoreQuarantinedFile(int64_t recordId, const std::string& destin
 
 bool Scanner::DeleteQuarantinedFile(int64_t recordId) {
     std::lock_guard<std::mutex> lock(quarantineMutex_);
-    sqlite3* db = nullptr;
-    std::string dbPath = quarantineDir_ + "/quarantine.db";
+    if (!quarantineDb_) {
+        std::string dbPath = quarantineDir_ + "/quarantine.db";
+        sqlite3_open(dbPath.c_str(), &quarantineDb_);
+    }
+    if (!quarantineDb_) return false;
+
     std::string encName;
-
-    if (sqlite3_open(dbPath.c_str(), &db) != SQLITE_OK) return false;
-
     const char* sql = "SELECT encrypted_filename FROM quarantined_files WHERE id = ? LIMIT 1;";
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(quarantineDb_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int64(stmt, 1, recordId);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             encName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
@@ -603,24 +850,25 @@ bool Scanner::DeleteQuarantinedFile(int64_t recordId) {
     }
 
     if (!encName.empty()) {
-        fs::path srcEnc = fs::path(quarantineDir_) / encName;
         std::error_code ec;
-        fs::remove(srcEnc, ec);
+        fs::path p = fs::path(quarantineDir_) / encName;
+        fs::remove(p, ec);
     }
 
     const char* delSql = "DELETE FROM quarantined_files WHERE id = ?;";
-    if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(quarantineDb_, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int64(stmt, 1, recordId);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
-    sqlite3_close(db);
+
+    LOG_INFO("Scanner", "Permanently deleted quarantined entry ID: " + std::to_string(recordId));
     return true;
 }
 
 bool Scanner::StartScan(const std::string& scanType, const std::string& customPath, ProgressCallback progressCb) {
     if (isScanning_.exchange(true)) {
-        return false; // Already running
+        return false;
     }
     cancelRequested_ = false;
     activeSessionId_ = GenerateSessionId(scanType == "quick" ? "QS" : scanType == "full" ? "FS" : "CS");
@@ -636,15 +884,75 @@ void Scanner::CancelScan() {
     cancelRequested_ = true;
 }
 
+// Major 2: Multi-threaded parallel scanner with work-stealing queue
 void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressCallback progressCb) {
-    LOG_INFO("Scanner", "Starting scan session: " + activeSessionId_ + " (" + scanType + ")");
+    LOG_INFO("Scanner", "Starting parallel scan session: " + activeSessionId_ + " (" + scanType + ")");
+    ScanHistoryStore::Instance().RecordSessionStart(activeSessionId_, scanType);
 
-    int filesScanned = 0;
-    int threatsFound = 0;
+    std::atomic<int> filesScanned{0};
+    std::atomic<int> threatsFound{0};
+    std::atomic<int> filesQuarantined{0};
     int estimatedFiles = EstimateFileCount(scanType, customPath);
 
-    std::vector<std::wstring> targets;
+    // Bounded Work Queue
+    constexpr size_t MAX_QUEUE_DEPTH = 10000;
+    struct WorkQueue {
+        std::mutex mtx;
+        std::condition_variable cvNotEmpty;
+        std::condition_variable cvNotFull;
+        std::deque<std::string> items;
+        bool done = false;
+    } queue;
 
+    unsigned int workerCount = (std::max)(2u, std::thread::hardware_concurrency());
+    std::vector<std::thread> workers;
+
+    for (unsigned int i = 0; i < workerCount; ++i) {
+        workers.emplace_back([this, &queue, &filesScanned, &threatsFound, &filesQuarantined, estimatedFiles, progressCb]() {
+            while (true) {
+                std::string path;
+                {
+                    std::unique_lock<std::mutex> lock(queue.mtx);
+                    queue.cvNotEmpty.wait(lock, [&queue, this]() {
+                        return !queue.items.empty() || queue.done || cancelRequested_;
+                    });
+
+                    if (cancelRequested_ || (queue.done && queue.items.empty())) {
+                        break;
+                    }
+
+                    path = queue.items.front();
+                    queue.items.pop_front();
+                    queue.cvNotFull.notify_one();
+                }
+
+                auto res = ScanSingleFile(path, activeSessionId_);
+                int scanned = ++filesScanned;
+
+                if (res.verdict == ScanVerdict::Malicious) {
+                    threatsFound++;
+                    filesQuarantined++;
+                } else if (res.verdict == ScanVerdict::Suspicious) {
+                    threatsFound++;
+                }
+
+                if (progressCb && (scanned <= 10 || scanned % 10 == 0 || res.verdict == ScanVerdict::Malicious)) {
+                    ScanProgressInfo info;
+                    info.sessionId = activeSessionId_;
+                    info.filesScanned = scanned;
+                    info.threatsDetected = threatsFound.load();
+                    info.filesQuarantined = filesQuarantined.load();
+                    info.currentFile = path;
+                    info.percentComplete = estimatedFiles > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / estimatedFiles) * 100.0f) : 50.0f;
+                    info.isComplete = false;
+                    progressCb(info);
+                }
+            }
+        });
+    }
+
+    // Producer Directory Traversal Targets
+    std::vector<std::wstring> targets;
     if (scanType == "quick") {
         wchar_t userProfile[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROFILE, nullptr, 0, userProfile))) {
@@ -657,7 +965,6 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
             }
         }
 
-        // Also enumerate C:\Users\* to find actual logged-in user profile folders
         std::error_code ec;
         fs::path usersDir = L"C:\\Users";
         if (fs::exists(usersDir, ec)) {
@@ -689,22 +996,70 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
         targets.push_back(Utf8ToUtf16(customPath));
     }
 
-    try {
-        for (const auto& target : targets) {
+    // Traverse directories and push into work queue
+    for (const auto& root : targets) {
+        if (cancelRequested_) break;
+        std::error_code ec;
+        if (!fs::exists(root, ec)) continue;
+
+        if (fs::is_regular_file(root, ec)) {
+            std::unique_lock<std::mutex> lock(queue.mtx);
+            queue.cvNotFull.wait(lock, [&queue, this]() {
+                return queue.items.size() < MAX_QUEUE_DEPTH || cancelRequested_;
+            });
             if (cancelRequested_) break;
-            TraverseDirectory(target, filesScanned, threatsFound, estimatedFiles, progressCb);
+            queue.items.push_back(Utf16ToUtf8(root));
+            queue.cvNotEmpty.notify_one();
+            continue;
         }
-    } catch (const std::exception& e) {
-        LOG_ERROR("Scanner", "Exception during ScanWorker execution: " + std::string(e.what()));
-    } catch (...) {
-        LOG_ERROR("Scanner", "Unknown exception during ScanWorker execution");
+
+        auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+        auto end = fs::recursive_directory_iterator();
+        while (!ec && it != end && !cancelRequested_) {
+            try {
+                if (it->is_regular_file(ec)) {
+                    std::string pStr = Utf16ToUtf8(it->path().wstring());
+                    std::unique_lock<std::mutex> lock(queue.mtx);
+                    queue.cvNotFull.wait(lock, [&queue, this]() {
+                        return queue.items.size() < MAX_QUEUE_DEPTH || cancelRequested_;
+                    });
+                    if (cancelRequested_) break;
+                    queue.items.push_back(std::move(pStr));
+                    queue.cvNotEmpty.notify_one();
+                }
+            } catch (...) {}
+            it.increment(ec);
+            if (ec) {
+                ec.clear();
+                it.pop();
+            }
+        }
+    }
+
+    // Notify workers traversal has completed
+    {
+        std::lock_guard<std::mutex> lock(queue.mtx);
+        queue.done = true;
+    }
+    queue.cvNotEmpty.notify_all();
+
+    for (auto& w : workers) {
+        if (w.joinable()) {
+            w.join();
+        }
     }
 
     isScanning_ = false;
+    std::string scanStatus = cancelRequested_ ? "CANCELLED" : "COMPLETED";
+    ScanHistoryStore::Instance().RecordSessionEnd(
+        activeSessionId_, filesScanned.load(), threatsFound.load(), filesQuarantined.load(), scanStatus
+    );
+
     ScanProgressInfo finalInfo;
     finalInfo.sessionId = activeSessionId_;
-    finalInfo.filesScanned = filesScanned;
-    finalInfo.threatsDetected = threatsFound;
+    finalInfo.filesScanned = filesScanned.load();
+    finalInfo.threatsDetected = threatsFound.load();
+    finalInfo.filesQuarantined = filesQuarantined.load();
     finalInfo.percentComplete = 100.0f;
     finalInfo.isComplete = true;
 
@@ -712,71 +1067,8 @@ void Scanner::ScanWorker(std::string scanType, std::string customPath, ProgressC
         progressCb(finalInfo);
     }
 
-    LOG_INFO("Scanner", "Scan complete. Files scanned: " + std::to_string(filesScanned) +
-             ", Threats: " + std::to_string(threatsFound));
-}
-
-void Scanner::TraverseDirectory(const std::wstring& root, int& scanned, int& threats, int totalEst, ProgressCallback progressCb) {
-    try {
-        std::error_code ec;
-        if (!fs::exists(root, ec)) return;
-
-        if (fs::is_regular_file(root, ec)) {
-            if (cancelRequested_) return;
-            auto res = ScanSingleFile(Utf16ToUtf8(root), activeSessionId_);
-            scanned++;
-            if (res.verdict == ScanVerdict::Malicious) threats++;
-
-            if (progressCb) {
-                ScanProgressInfo info;
-                info.sessionId = activeSessionId_;
-                info.filesScanned = scanned;
-                info.threatsDetected = threats;
-                info.currentFile = Utf16ToUtf8(root);
-                info.percentComplete = totalEst > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / totalEst) * 100.0f) : 50.0f;
-                progressCb(info);
-            }
-            return;
-        }
-
-        auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
-        auto end = fs::recursive_directory_iterator();
-        while (!ec && it != end) {
-            if (cancelRequested_) break;
-
-            try {
-                const auto& entry = *it;
-                if (entry.is_regular_file(ec)) {
-                    std::string pathStr = Utf16ToUtf8(entry.path().wstring());
-                    auto res = ScanSingleFile(pathStr, activeSessionId_);
-                    scanned++;
-                    if (res.verdict == ScanVerdict::Malicious) threats++;
-
-                    if (progressCb && (scanned <= 10 || scanned % 5 == 0 || res.verdict == ScanVerdict::Malicious)) {
-                        ScanProgressInfo info;
-                        info.sessionId = activeSessionId_;
-                        info.filesScanned = scanned;
-                        info.threatsDetected = threats;
-                        info.currentFile = pathStr;
-                        info.percentComplete = totalEst > 0 ? (std::min)(99.0f, (static_cast<float>(scanned) / totalEst) * 100.0f) : 50.0f;
-                        progressCb(info);
-                    }
-                }
-            } catch (...) {
-                // Ignore per-entry access issues
-            }
-
-            it.increment(ec);
-            if (ec) {
-                ec.clear();
-                it.pop();
-            }
-        }
-    } catch (const std::exception& e) {
-        LOG_WARN("Scanner", "Exception during directory traversal of " + Utf16ToUtf8(root) + ": " + e.what());
-    } catch (...) {
-        LOG_WARN("Scanner", "Unknown exception during directory traversal of " + Utf16ToUtf8(root));
-    }
+    LOG_INFO("Scanner", "Parallel scan finished (" + scanStatus + "). Files scanned: " +
+             std::to_string(filesScanned.load()) + ", Threats: " + std::to_string(threatsFound.load()));
 }
 
 int Scanner::EstimateFileCount(const std::string& scanType, const std::string& customPath) {

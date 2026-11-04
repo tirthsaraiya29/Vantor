@@ -18,6 +18,10 @@
 
 namespace vantor {
 
+#ifndef VANTOR_VERSION
+#define VANTOR_VERSION "2.0.0"
+#endif
+
 // Constants
 constexpr const wchar_t* SERVICE_NAME = L"VantorAntivirusService";
 constexpr const wchar_t* SERVICE_DISPLAY_NAME = L"Vantor Antivirus Endpoint Service";
@@ -68,6 +72,47 @@ struct ScanResult {
     uint64_t fileSizeBytes = 0;
 };
 
+enum class PolicyAction {
+    Quarantine = 0,
+    Block = 1,
+    Alert = 2,
+    Allow = 3,
+    Prompt = 4
+};
+
+inline const char* PolicyActionToString(PolicyAction a) {
+    switch (a) {
+        case PolicyAction::Quarantine: return "Quarantine";
+        case PolicyAction::Block: return "Block";
+        case PolicyAction::Alert: return "Alert";
+        case PolicyAction::Allow: return "Allow";
+        case PolicyAction::Prompt: return "Prompt";
+        default: return "Quarantine";
+    }
+}
+
+inline PolicyAction StringToPolicyAction(const std::string& s) {
+    std::string lower = s;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (lower == "block") return PolicyAction::Block;
+    if (lower == "alert") return PolicyAction::Alert;
+    if (lower == "allow") return PolicyAction::Allow;
+    if (lower == "prompt") return PolicyAction::Prompt;
+    return PolicyAction::Quarantine;
+}
+
+struct PolicyRule {
+    std::string id;
+    std::string name;
+    std::string verdictMatch = "ANY";    // "MALICIOUS", "SUSPICIOUS", "ANY"
+    std::string threatNameRegex;        // e.g. "Heuristic\\.Script\\..*"
+    std::string pathGlob;               // e.g. "C:\\Dev\\**" or "*.ps1"
+    PolicyAction action = PolicyAction::Quarantine;
+    bool enabled = true;
+};
+
 struct EngineConfig {
     bool rtpEnabled = true;
     double heuristicThreshold = 0.75;
@@ -77,7 +122,40 @@ struct EngineConfig {
     std::string updateServerUrl = "https://signatures.vantor.local/v1/updates";
     int updateIntervalMinutes = 60;
     std::vector<std::string> excludedPaths;
+    std::vector<PolicyRule> policyRules;
+
+    // Telemetry & Privacy Control (Major 20)
+    bool telemetryEnabled = false;                    // Default OFF for user privacy
+    std::string telemetryCategory = "threats_only";  // "threats_only", "full_scan", "system_metadata"
+    int telemetryRetentionDays = 30;
 };
+
+// GDPR / Enterprise Path Anonymization (Major 20)
+inline std::string AnonymizePath(const std::string& path) {
+    if (path.empty()) return "";
+    std::string norm = path;
+    for (auto& c : norm) {
+        if (c == '/') c = '\\';
+    }
+
+    std::string lower = norm;
+    for (auto& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    const std::string prefix = "users\\";
+    size_t pos = lower.find(prefix);
+    if (pos != std::string::npos) {
+        size_t userStart = pos + prefix.length();
+        size_t userEnd = lower.find('\\', userStart);
+        if (userEnd != std::string::npos) {
+            std::string before = norm.substr(0, userStart);
+            std::string after = norm.substr(userEnd);
+            return before + "<redacted>" + after;
+        } else {
+            return norm.substr(0, userStart) + "<redacted>";
+        }
+    }
+    return norm;
+}
 
 struct QuarantineEntry {
     int64_t id = 0;

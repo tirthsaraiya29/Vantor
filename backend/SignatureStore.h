@@ -37,11 +37,12 @@ public:
 
     // Query APIs - Ultra high performance (< 1 microsecond per check)
     bool Contains(const std::string& sha256Hex);
+    bool Contains(const uint8_t rawSha256[32]);
     size_t GetTotalSignatures() const;
 
     // Mutation APIs
     bool AddSignature(const std::string& sha256Hex);
-    size_t BulkImport(const std::vector<std::string>& sha256HexList);
+    size_t BulkImport(const std::vector<std::string>& sha256HexList, bool rebuildIndex = true);
     size_t ImportFromTextFile(const std::string& textFilePath);
 
     SignatureStore();

@@ -94,3 +94,34 @@ To distribute signature updates to remote endpoints:
    ```
 2. Configure the URL in `config.json` under `"updateServerUrl"`.
 3. The background service polls the update endpoint periodically according to `"updateIntervalMinutes"`.
+
+---
+
+## 5. Automated SignatureUpdater & Remote REST API
+
+Vantor 2.0 incorporates a native WinHTTP client (`SignatureUpdater`) and Remote Management REST API:
+
+### Native Background Polling Service
+- Initiates an asynchronous WinHTTP connection (`WINHTTP_ACCESS_TYPE_DEFAULT_PROXY`).
+- Downloads delta updates over TLS 1.3 with Gzip/Deflate compression support.
+- Ingests updates in transactional batches with an atomic single-pass rebuild of `signatures.idx`.
+- Records update history and UTC timestamps for audit verification.
+
+### Triggering Updates via REST API
+```bash
+curl -X POST http://127.0.0.1:50051/api/v1/signatures/update \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer vantor-secure-token-v2" \
+  -d '{"url": "https://signatures.vantor.local/v1/updates"}'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "signatures_added": 1250,
+  "total_signatures": 894300,
+  "version": "2026.11.04",
+  "last_updated": "2026-11-04T12:00:00Z"
+}
+```

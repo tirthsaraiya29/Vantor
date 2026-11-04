@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "Logger.h"
 #include <sddl.h>
 #include <vector>
 #include <string>
@@ -171,6 +172,18 @@ public:
     }
 
     bool Start(MessageHandler handler) {
+        // SDDL string validation at startup (Minor 27)
+        PSECURITY_DESCRIPTOR pSD = nullptr;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                IPC_PIPE_SDDL,
+                SDDL_REVISION_1,
+                &pSD,
+                nullptr) || !pSD) {
+            LOG_FATAL("NamedPipeServer", "Named pipe SDDL descriptor validation failed. Refusing insecure IPC launch.");
+            return false;
+        }
+        LocalFree(pSD);
+
         handler_ = std::move(handler);
         running_ = true;
         hStopEvent_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);

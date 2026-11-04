@@ -7,6 +7,8 @@
 #include <QProgressBar>
 #include <QTimer>
 #include <QPainter>
+#include <QSystemTrayIcon>
+#include <QSizeGrip>
 #include "performance/FrameRateLimiter.h"
 #include "ZipBombGuard.h"
 #include "GrpcClient.h"
@@ -22,6 +24,7 @@ public:
     explicit ScannerRingWidget(QWidget* parent = nullptr);
     void StartAnimation();
     void StopAnimation();
+    void SetTargetFps(int fps);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -44,6 +47,7 @@ protected:
     void dropEvent(QDropEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
 private slots:
     void OnNavDashboard();
@@ -56,12 +60,16 @@ private slots:
     void OnStartCustomScan();
     void OnCancelScan();
     void OnScanTimerTick();
+    void OnToggleMaximize();
+    void OnTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+    void OnViewThreatsClicked();
 
 private:
     void SetupUi();
     void SetupTitleBar(QVBoxLayout* rootLayout);
     void SetupSidebar(QHBoxLayout* contentLayout);
     void SetupPages();
+    void SetupSystemTray();
     QWidget* CreateDashboardPage();
     QWidget* CreateScanningPage();
     QWidget* CreateSummaryPage();
@@ -89,6 +97,7 @@ private:
     QLabel* summaryScannedLabel_ = nullptr;
     QLabel* summaryThreatsLabel_ = nullptr;
     QLabel* summaryQuarantinedLabel_ = nullptr;
+    QPushButton* btnViewThreats_ = nullptr;
 
     // Status Banner
     QFrame* statusCard_ = nullptr;
@@ -99,8 +108,14 @@ private:
     QTimer* scanPollTimer_ = nullptr;
     bool isScanning_ = false;
 
-    // Window Dragging Support
+    // Window Dragging & Sizing Support
     QPoint dragPosition_;
+    QPushButton* btnMax_ = nullptr;
+    QSizeGrip* sizeGrip_ = nullptr;
+
+    // System Tray
+    QSystemTrayIcon* trayIcon_ = nullptr;
+    QMenu* trayMenu_ = nullptr;
 };
 
 } // namespace ui

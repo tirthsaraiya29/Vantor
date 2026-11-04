@@ -1,0 +1,83 @@
+{
+  "version": "1.0.0",
+  "families": [
+    {
+      "name": "Trojan.Win32.Emotet",
+      "category": "Trojan / Downloader",
+      "severity": "CRITICAL",
+      "min_matches": 2,
+      "patterns": [
+        "Emotet",
+        "Geodo",
+        "E5 8B 4D 0C 85 C9 74",
+        "cookie_str",
+        "powershell -w hidden -enc"
+      ]
+    },
+    {
+      "name": "Backdoor.Win32.CobaltStrike",
+      "category": "Command & Control / Beacon",
+      "severity": "CRITICAL",
+      "min_matches": 2,
+      "patterns": [
+        "beacon.dll",
+        "ReflectiveLoader",
+        "%s as %s\\%s: %d",
+        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream",
+        "FC 48 83 E4 F0 E8 C0 00 00 00"
+      ]
+    },
+    {
+      "name": "HackTool.Win32.Mimikatz",
+      "category": "Credential Access",
+      "severity": "CRITICAL",
+      "min_matches": 2,
+      "patterns": [
+        "mimikatz",
+        "sekurlsa::logonpasswords",
+        "lsadump::sam",
+        "privilege::debug",
+        "gentilkiwi"
+      ]
+    },
+    {
+      "name": "Ransom.Win32.LockBit",
+      "category": "Ransomware",
+      "severity": "CRITICAL",
+      "min_matches": 2,
+      "patterns": [
+        "LockBit",
+        "Restore-My-Files.txt",
+        ".lockbit",
+        "vssadmin delete shadows /all /quiet",
+        "bcdedit /set {default} recoveryenabled No"
+      ]
+    },
+    {
+      "name": "Spyware.Win32.AgentTesla",
+      "category": "InfoStealer / Keylogger",
+      "severity": "HIGH",
+      "min_matches": 2,
+      "patterns": [
+        "AgentTesla",
+        "smtp.mail.",
+        "GetClipboardData",
+        "webbrowserpassview",
+        "password_recovery"
+      ]
+    },
+    {
+      "name": "Trojan.Win32.TrickBot",
+      "category": "Banking Trojan",
+      "severity": "CRITICAL",
+      "min_matches": 2,
+      "patterns": [
+        "trickbot",
+        "pwgrab64",
+        "networkdll64",
+        "mailsearcher64",
+        "wormdll64"
+      ]
+    }
+  ]
+}

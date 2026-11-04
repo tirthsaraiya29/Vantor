@@ -2,6 +2,7 @@
 #include "QuarantineDialog.h"
 #include "SettingsDialog.h"
 #include "../service/AntiTamper.h"
+#include "../common/Common.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -11,6 +12,10 @@
 #include <QMessageBox>
 #include <QDragEnterEvent>
 #include <QMimeData>
+#include <QMenu>
+#include <QAction>
+#include <QFontMetrics>
+#include <QApplication>
 #include <cmath>
 
 namespace vantor {
@@ -40,6 +45,13 @@ void ScannerRingWidget::StopAnimation() {
     animTimer_->stop();
 }
 
+void ScannerRingWidget::SetTargetFps(int fps) {
+    limiter_.SetTargetFps(fps);
+    if (animTimer_->isActive()) {
+        animTimer_->setInterval(limiter_.GetTargetIntervalMs());
+    }
+}
+
 void ScannerRingWidget::paintEvent(QPaintEvent* /*event*/) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -56,18 +68,15 @@ void ScannerRingWidget::paintEvent(QPaintEvent* /*event*/) {
         float x = cx + radius * std::cos(rad);
         float y = cy + radius * std::sin(rad);
 
-        // Calculate angular difference from sweep angle
         float diff = std::fabs(dotAngle - angle_);
         if (diff > 180.0f) diff = 360.0f - diff;
 
         if (diff < 30.0f) {
-            // Bright sweeping radar highlight
             float intensity = 1.0f - (diff / 30.0f);
             p.setBrush(QColor(56, 189, 248, static_cast<int>(255 * intensity)));
             p.setPen(Qt::NoPen);
             p.drawEllipse(QPointF(x, y), 3.0, 3.0);
         } else {
-            // Dim background dot
             p.setBrush(QColor(51, 65, 85, 120));
             p.setPen(Qt::NoPen);
             p.drawEllipse(QPointF(x, y), 1.5, 1.5);
@@ -90,6 +99,7 @@ MainWindow::MainWindow(QWidget* parent)
     setAcceptDrops(true);
 
     SetupUi();
+    SetupSystemTray();
 
     scanPollTimer_ = new QTimer(this);
     connect(scanPollTimer_, &QTimer::timeout, this, &MainWindow::OnScanTimerTick);
@@ -103,7 +113,7 @@ void MainWindow::SetupUi() {
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
-    // Custom Draggable Title Bar
+    // Custom Draggable Title Bar (Minor 31: Maximize button)
     SetupTitleBar(rootLayout);
 
     // Main Body (Sidebar + Stacked Pages)
@@ -120,6 +130,14 @@ void MainWindow::SetupUi() {
 
     contentLayout->addWidget(pages_, 1);
     rootLayout->addLayout(contentLayout, 1);
+
+    // Minor 31: Add QSizeGrip in bottom right
+    auto* bottomRow = new QHBoxLayout();
+    bottomRow->setContentsMargins(0, 0, 4, 4);
+    bottomRow->addStretch();
+    sizeGrip_ = new QSizeGrip(central);
+    bottomRow->addWidget(sizeGrip_);
+    rootLayout->addLayout(bottomRow);
 }
 
 void MainWindow::SetupTitleBar(QVBoxLayout* rootLayout) {
@@ -140,14 +158,30 @@ void MainWindow::SetupTitleBar(QVBoxLayout* rootLayout) {
     btnMin->setStyleSheet("background: transparent; border: none; font-size: 12px; color: #94a3b8;");
     connect(btnMin, &QPushButton::clicked, this, &QMainWindow::showMinimized);
 
+    btnMax_ = new QPushButton("□", titleBar);
+    btnMax_->setFixedSize(28, 28);
+    btnMax_->setStyleSheet("background: transparent; border: none; font-size: 12px; color: #94a3b8;");
+    connect(btnMax_, &QPushButton::clicked, this, &MainWindow::OnToggleMaximize);
+
     auto* btnClose = new QPushButton("✕", titleBar);
     btnClose->setFixedSize(28, 28);
     btnClose->setStyleSheet("background: transparent; border: none; font-size: 12px; color: #94a3b8;");
     connect(btnClose, &QPushButton::clicked, this, &QMainWindow::close);
 
     titleLayout->addWidget(btnMin);
+    titleLayout->addWidget(btnMax_);
     titleLayout->addWidget(btnClose);
     rootLayout->addWidget(titleBar);
+}
+
+void MainWindow::OnToggleMaximize() {
+    if (isMaximized()) {
+        showNormal();
+        btnMax_->setText("□");
+    } else {
+        showMaximized();
+        btnMax_->setText("❐");
+    }
 }
 
 void MainWindow::SetupSidebar(QHBoxLayout* contentLayout) {
@@ -159,17 +193,21 @@ void MainWindow::SetupSidebar(QHBoxLayout* contentLayout) {
     sideLayout->setContentsMargins(12, 20, 12, 20);
     sideLayout->setSpacing(8);
 
+    // Minor 34: Navigation buttons are checkable
     btnNavDash_ = new QPushButton("Dashboard", sidebar);
     btnNavDash_->setObjectName("navButton");
+    btnNavDash_->setCheckable(true);
     btnNavDash_->setChecked(true);
     connect(btnNavDash_, &QPushButton::clicked, this, &MainWindow::OnNavDashboard);
 
     btnNavQuar_ = new QPushButton("Quarantine Vault", sidebar);
     btnNavQuar_->setObjectName("navButton");
+    btnNavQuar_->setCheckable(true);
     connect(btnNavQuar_, &QPushButton::clicked, this, &MainWindow::OnNavQuarantine);
 
     btnNavSett_ = new QPushButton("Settings", sidebar);
     btnNavSett_->setObjectName("navButton");
+    btnNavSett_->setCheckable(true);
     connect(btnNavSett_, &QPushButton::clicked, this, &MainWindow::OnNavSettings);
 
     auto* btnAudit = new QPushButton("Integrity Audit", sidebar);
@@ -182,11 +220,77 @@ void MainWindow::SetupSidebar(QHBoxLayout* contentLayout) {
     sideLayout->addWidget(btnAudit);
     sideLayout->addStretch();
 
-    auto* verLabel = new QLabel("v2.0.0-PROD (C++20)", sidebar);
+    // Minor 40: Use VANTOR_VERSION
+    auto* verLabel = new QLabel(QString("v%1 (C++20)").arg(VANTOR_VERSION), sidebar);
     verLabel->setStyleSheet("color: #475569; font-size: 10px; font-weight: 600; padding: 6px;");
     sideLayout->addWidget(verLabel);
 
     contentLayout->addWidget(sidebar);
+}
+
+// Major 4: Windows System Tray Integration
+void MainWindow::SetupSystemTray() {
+    trayIcon_ = new QSystemTrayIcon(this);
+    
+    // Draw programmatic shield icon
+    QPixmap pixmap(32, 32);
+    pixmap.fill(Qt::transparent);
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setBrush(QColor(2, 132, 199));
+    p.setPen(Qt::NoPen);
+    p.drawRoundedRect(4, 4, 24, 24, 6, 6);
+    p.setPen(QPen(Qt::white, 2));
+    p.drawLine(10, 16, 14, 20);
+    p.drawLine(14, 20, 22, 12);
+    p.end();
+
+    trayIcon_->setIcon(QIcon(pixmap));
+    trayIcon_->setToolTip("Vantor Antivirus Endpoint Security");
+
+    trayMenu_ = new QMenu(this);
+    trayMenu_->addAction("Open Vantor Dashboard", this, [this]() {
+        showNormal();
+        activateWindow();
+    });
+    trayMenu_->addAction("Quick Scan", this, &MainWindow::OnStartQuickScan);
+    trayMenu_->addSeparator();
+    trayMenu_->addAction("Exit Vantor", qApp, &QCoreApplication::quit);
+
+    trayIcon_->setContextMenu(trayMenu_);
+    connect(trayIcon_, &QSystemTrayIcon::activated, this, &MainWindow::OnTrayIconActivated);
+    trayIcon_->show();
+}
+
+void MainWindow::OnTrayIconActivated(QSystemTrayIcon::ActivationReason reason) {
+    if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
+        if (isVisible()) {
+            hide();
+        } else {
+            showNormal();
+            activateWindow();
+        }
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::ActivationChange) {
+        // Minor 36: Drop FPS to 15 when window is inactive
+        if (!isActiveWindow() && scannerRing_) {
+            scannerRing_->SetTargetFps(15);
+        } else if (scannerRing_) {
+            scannerRing_->SetTargetFps(60);
+        }
+    } else if (event->type() == QEvent::WindowStateChange) {
+        // Major 4: Minimize to tray
+        if (isMinimized()) {
+            hide();
+            if (trayIcon_) {
+                trayIcon_->showMessage("Vantor Antivirus", "Minimized to tray. Real-Time Protection remains active.", QSystemTrayIcon::Information, 2000);
+            }
+        }
+    }
+    QMainWindow::changeEvent(event);
 }
 
 QWidget* MainWindow::CreateDashboardPage() {
@@ -195,7 +299,6 @@ QWidget* MainWindow::CreateDashboardPage() {
     layout->setContentsMargins(35, 30, 35, 30);
     layout->setSpacing(25);
 
-    // Security Status Card
     statusCard_ = new QFrame(page);
     statusCard_->setObjectName("statusCardSafe");
     statusCard_->setFixedHeight(110);
@@ -213,12 +316,10 @@ QWidget* MainWindow::CreateDashboardPage() {
     cardLayout->addWidget(statusSubtitle_);
     layout->addWidget(statusCard_);
 
-    // Section Header
     auto* scanHeader = new QLabel("On-Demand Malware Scanning", page);
     scanHeader->setStyleSheet("font-size: 16px; font-weight: 700; color: #f8fafc;");
     layout->addWidget(scanHeader);
 
-    // Scan Actions Grid
     auto* grid = new QGridLayout();
     grid->setSpacing(16);
 
@@ -245,93 +346,73 @@ QWidget* MainWindow::CreateDashboardPage() {
         return card;
     };
 
-    grid->addWidget(makeScanCard("Quick Scan", "Inspects active user directories, downloads, desktop, and startup locations.", &MainWindow::OnStartQuickScan), 0, 0);
-    grid->addWidget(makeScanCard("Full System Scan", "Exhaustive traversal across all local fixed drives and system partitions.", &MainWindow::OnStartFullScan), 0, 1);
-    grid->addWidget(makeScanCard("Custom Scan", "Select specific folder or file for deep structural heuristic evaluation.", &MainWindow::OnStartCustomScan), 0, 2);
+    grid->addWidget(makeScanCard("Quick Scan", "Scans common system startup locations, running processes, memory, and critical directories.", &MainWindow::OnStartQuickScan), 0, 0);
+    grid->addWidget(makeScanCard("Full System Scan", "Comprehensive scan inspecting all local partitions, archives, boot structures, and storage media.", &MainWindow::OnStartFullScan), 0, 1);
+    grid->addWidget(makeScanCard("Custom Path Scan", "Target a specific folder or drive for isolated inspection, heuristics, and hash comparison.", &MainWindow::OnStartCustomScan), 0, 2);
 
     layout->addLayout(grid);
     layout->addStretch();
-
-    // Drop Zone Hint
-    auto* dropHint = new QLabel("Tip: Drag and drop files or ZIP archives anywhere onto this window to inspect.", page);
-    dropHint->setStyleSheet("color: #64748b; font-size: 12px; text-align: center;");
-    dropHint->setAlignment(Qt::AlignCenter);
-    layout->addWidget(dropHint);
-
     return page;
 }
 
 QWidget* MainWindow::CreateScanningPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 30, 40, 30);
+    layout->setAlignment(Qt::AlignCenter);
     layout->setSpacing(20);
 
-    layout->addStretch();
-
-    // Centered Scanner Radar Ring
-    auto* ringHolder = new QHBoxLayout();
     scannerRing_ = new ScannerRingWidget(page);
-    ringHolder->addStretch();
-    ringHolder->addWidget(scannerRing_);
-    ringHolder->addStretch();
-    layout->addLayout(ringHolder);
+    layout->addWidget(scannerRing_, 0, Qt::AlignCenter);
 
-    // Percentage Label
     scanPercentLabel_ = new QLabel("0%", page);
-    scanPercentLabel_->setAlignment(Qt::AlignCenter);
-    scanPercentLabel_->setStyleSheet("font-size: 32px; font-weight: 800; color: #38bdf8;");
-    layout->addWidget(scanPercentLabel_);
+    scanPercentLabel_->setStyleSheet("font-size: 24px; font-weight: 800; color: #38bdf8;");
+    layout->addWidget(scanPercentLabel_, 0, Qt::AlignCenter);
 
-    // Progress Bar
-    scanProgressBar_ = new QProgressBar(page);
-    scanProgressBar_->setRange(0, 100);
-    scanProgressBar_->setValue(0);
-    layout->addWidget(scanProgressBar_);
-
-    // File Path Ticker
-    scanPathLabel_ = new QLabel("Initializing engine...", page);
-    scanPathLabel_->setAlignment(Qt::AlignCenter);
+    scanPathLabel_ = new QLabel("Preparing scan engine...", page);
     scanPathLabel_->setStyleSheet("color: #94a3b8; font-size: 12px;");
-    layout->addWidget(scanPathLabel_);
+    scanPathLabel_->setAlignment(Qt::AlignCenter);
+    layout->addWidget(scanPathLabel_, 0, Qt::AlignCenter);
 
-    // Counters Bar
+    scanProgressBar_ = new QProgressBar(page);
+    scanProgressBar_->setFixedWidth(400);
+    scanProgressBar_->setFixedHeight(6);
+    scanProgressBar_->setTextVisible(false);
+    layout->addWidget(scanProgressBar_, 0, Qt::AlignCenter);
+
     auto* countersLayout = new QHBoxLayout();
     countersLayout->setSpacing(30);
-    countersLayout->setAlignment(Qt::AlignCenter);
 
-    auto makeCounter = [](const QString& label, QLabel*& valueLabel, const QString& color) {
-        auto* holder = new QVBoxLayout();
-        auto* l = new QLabel(label);
-        l->setStyleSheet("font-size: 11px; color: #64748b; font-weight: 600; text-align: center;");
+    auto makeCounter = [](const QString& label, QLabel*& valLabel) {
+        auto* frame = new QFrame();
+        auto* l = new QVBoxLayout(frame);
+        l->setContentsMargins(0, 0, 0, 0);
+        l->setSpacing(2);
         l->setAlignment(Qt::AlignCenter);
 
-        valueLabel = new QLabel("0");
-        valueLabel->setStyleSheet(QString("font-size: 20px; font-weight: 800; color: %1;").arg(color));
-        valueLabel->setAlignment(Qt::AlignCenter);
+        valLabel = new QLabel("0", frame);
+        valLabel->setStyleSheet("font-size: 18px; font-weight: 700; color: #f8fafc;");
+        valLabel->setAlignment(Qt::AlignCenter);
 
-        holder->addWidget(l);
-        holder->addWidget(valueLabel);
-        return holder;
+        auto* t = new QLabel(label, frame);
+        t->setStyleSheet("font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;");
+        t->setAlignment(Qt::AlignCenter);
+
+        l->addWidget(valLabel);
+        l->addWidget(t);
+        return frame;
     };
 
-    countersLayout->addLayout(makeCounter("FILES SCANNED", countScannedLabel_, "#f8fafc"));
-    countersLayout->addLayout(makeCounter("SUSPICIOUS", countThreatsLabel_, "#f59e0b"));
-    countersLayout->addLayout(makeCounter("QUARANTINED", countQuarantinedLabel_, "#ef4444"));
+    countersLayout->addWidget(makeCounter("Files Scanned", countScannedLabel_));
+    countersLayout->addWidget(makeCounter("Threats Detected", countThreatsLabel_));
+    countersLayout->addWidget(makeCounter("Quarantined", countQuarantinedLabel_));
+
     layout->addLayout(countersLayout);
 
-    layout->addStretch();
-
-    // Cancel Button
-    auto* btnHolder = new QHBoxLayout();
     btnCancelScan_ = new QPushButton("Cancel Scan", page);
     btnCancelScan_->setObjectName("btnDanger");
     btnCancelScan_->setFixedWidth(140);
     connect(btnCancelScan_, &QPushButton::clicked, this, &MainWindow::OnCancelScan);
-    btnHolder->addStretch();
-    btnHolder->addWidget(btnCancelScan_);
-    btnHolder->addStretch();
-    layout->addLayout(btnHolder);
+    layout->addWidget(btnCancelScan_, 0, Qt::AlignCenter);
 
     return page;
 }
@@ -339,61 +420,77 @@ QWidget* MainWindow::CreateScanningPage() {
 QWidget* MainWindow::CreateSummaryPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(40, 40, 40, 40);
-    layout->setSpacing(25);
+    layout->setAlignment(Qt::AlignCenter);
+    layout->setSpacing(20);
 
-    auto* title = new QLabel("Scan Complete", page);
-    title->setStyleSheet("font-size: 24px; font-weight: 800; color: #f8fafc;");
-    layout->addWidget(title);
+    auto* icon = new QLabel("🛡️", page);
+    icon->setStyleSheet("font-size: 48px;");
+    layout->addWidget(icon, 0, Qt::AlignCenter);
 
-    auto* card = new QFrame(page);
-    card->setObjectName("card");
-    auto* cardLayout = new QVBoxLayout(card);
-    cardLayout->setContentsMargins(30, 30, 30, 30);
-    cardLayout->setSpacing(16);
+    auto* title = new QLabel("Scan Completed", page);
+    title->setStyleSheet("font-size: 22px; font-weight: 800; color: #f8fafc;");
+    layout->addWidget(title, 0, Qt::AlignCenter);
 
-    summaryScannedLabel_ = new QLabel("Files Scanned: 0", card);
-    summaryScannedLabel_->setStyleSheet("font-size: 16px; color: #e2e8f0;");
+    summaryScannedLabel_ = new QLabel("Files Scanned: 0", page);
+    summaryScannedLabel_->setStyleSheet("font-size: 14px; color: #94a3b8;");
+    layout->addWidget(summaryScannedLabel_, 0, Qt::AlignCenter);
 
-    summaryThreatsLabel_ = new QLabel("Threats Detected: 0", card);
-    summaryThreatsLabel_->setStyleSheet("font-size: 16px; color: #f59e0b;");
+    summaryThreatsLabel_ = new QLabel("Threats Detected: 0", page);
+    summaryThreatsLabel_->setStyleSheet("font-size: 14px; color: #ef4444; font-weight: 700;");
+    layout->addWidget(summaryThreatsLabel_, 0, Qt::AlignCenter);
 
-    summaryQuarantinedLabel_ = new QLabel("Files Quarantined: 0", card);
-    summaryQuarantinedLabel_->setStyleSheet("font-size: 16px; color: #ef4444; font-weight: bold;");
+    summaryQuarantinedLabel_ = new QLabel("Files Quarantined: 0", page);
+    summaryQuarantinedLabel_->setStyleSheet("font-size: 14px; color: #f59e0b;");
+    layout->addWidget(summaryQuarantinedLabel_, 0, Qt::AlignCenter);
 
-    cardLayout->addWidget(summaryScannedLabel_);
-    cardLayout->addWidget(summaryThreatsLabel_);
-    cardLayout->addWidget(summaryQuarantinedLabel_);
-    layout->addWidget(card);
+    // Minor 38: "View Threats" button on summary page
+    btnViewThreats_ = new QPushButton("View Detected Threats", page);
+    btnViewThreats_->setObjectName("btnDanger");
+    btnViewThreats_->setFixedWidth(200);
+    btnViewThreats_->setVisible(false);
+    connect(btnViewThreats_, &QPushButton::clicked, this, &MainWindow::OnViewThreatsClicked);
+    layout->addWidget(btnViewThreats_, 0, Qt::AlignCenter);
 
-    layout->addStretch();
-
-    auto* doneBtn = new QPushButton("Back to Dashboard", page);
-    doneBtn->setObjectName("btnPrimary");
-    doneBtn->setFixedWidth(160);
-    connect(doneBtn, &QPushButton::clicked, this, &MainWindow::OnNavDashboard);
-    layout->addWidget(doneBtn);
+    auto* btnDone = new QPushButton("Return to Dashboard", page);
+    btnDone->setObjectName("btnPrimary");
+    btnDone->setFixedWidth(180);
+    connect(btnDone, &QPushButton::clicked, this, &MainWindow::OnNavDashboard);
+    layout->addWidget(btnDone, 0, Qt::AlignCenter);
 
     return page;
+}
+
+void MainWindow::OnViewThreatsClicked() {
+    OnNavQuarantine();
 }
 
 // =================== Navigation Slots ===================
 
 void MainWindow::OnNavDashboard() {
-    pages_->setCurrentIndex(0);
     btnNavDash_->setChecked(true);
     btnNavQuar_->setChecked(false);
     btnNavSett_->setChecked(false);
+    pages_->setCurrentIndex(0);
 }
 
 void MainWindow::OnNavQuarantine() {
+    btnNavDash_->setChecked(false);
+    btnNavQuar_->setChecked(true);
+    btnNavSett_->setChecked(false);
     QuarantineDialog dlg(this);
     dlg.exec();
+    btnNavDash_->setChecked(true);
+    btnNavQuar_->setChecked(false);
 }
 
 void MainWindow::OnNavSettings() {
+    btnNavDash_->setChecked(false);
+    btnNavQuar_->setChecked(false);
+    btnNavSett_->setChecked(true);
     SettingsDialog dlg(this);
     dlg.exec();
+    btnNavDash_->setChecked(true);
+    btnNavSett_->setChecked(false);
 }
 
 void MainWindow::OnRunIntegrityAudit() {
@@ -435,7 +532,7 @@ void MainWindow::OnStartCustomScan() {
 
 void MainWindow::StartScan(const std::string& type, const std::string& path) {
     isScanning_ = true;
-    pages_->setCurrentIndex(1); // Switch to Scan View
+    pages_->setCurrentIndex(1);
 
     scannerRing_->StartAnimation();
     scanProgressBar_->setValue(0);
@@ -468,10 +565,11 @@ void MainWindow::OnScanTimerTick() {
 
         if (!info.currentFile.empty()) {
             QString path = QString::fromStdString(info.currentFile);
-            if (path.length() > 50) {
-                path = "..." + path.right(47);
-            }
-            scanPathLabel_->setText(path);
+            // Minor 35: Elide path text using QFontMetrics
+            QFontMetrics fm(scanPathLabel_->font());
+            int labelWidth = scanPathLabel_->width() > 100 ? scanPathLabel_->width() : 500;
+            QString elided = fm.elidedText(path, Qt::ElideLeft, labelWidth);
+            scanPathLabel_->setText(elided);
         }
 
         if (info.isComplete) {
@@ -479,6 +577,14 @@ void MainWindow::OnScanTimerTick() {
             scanPollTimer_->stop();
             isScanning_ = false;
             ShowSummary(info.filesScanned, info.threatsDetected, info.filesQuarantined);
+            
+            // Major 4: Notification on scan completion
+            if (trayIcon_) {
+                QString msg = QString("Scan complete. %1 files checked, %2 threats detected.")
+                                  .arg(info.filesScanned).arg(info.threatsDetected);
+                trayIcon_->showMessage("Vantor Antivirus", msg,
+                                      (info.threatsDetected > 0) ? QSystemTrayIcon::Warning : QSystemTrayIcon::Information, 3000);
+            }
         }
     }
 }
@@ -487,14 +593,21 @@ void MainWindow::ShowSummary(int scanned, int threats, int quarantined) {
     summaryScannedLabel_->setText(QString("Files Scanned: %1").arg(scanned));
     summaryThreatsLabel_->setText(QString("Threats Detected: %1").arg(threats));
     summaryQuarantinedLabel_->setText(QString("Files Quarantined: %1").arg(quarantined));
-    pages_->setCurrentIndex(2); // Switch to Summary View
+    
+    // Minor 38: Show "View Threats" button if threats > 0
+    btnViewThreats_->setVisible(threats > 0);
+    pages_->setCurrentIndex(2);
 }
 
 // =================== Drag & Drop / Window Drag ===================
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
+    // Minor 37: Extension & local file filter on dragEnterEvent
     if (event->mimeData()->hasUrls()) {
-        event->acceptProposedAction();
+        const auto urls = event->mimeData()->urls();
+        if (!urls.isEmpty() && urls.first().isLocalFile()) {
+            event->acceptProposedAction();
+        }
     }
 }
 
@@ -530,7 +643,7 @@ void MainWindow::mousePressEvent(QMouseEvent* event) {
 }
 
 void MainWindow::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton) {
+    if (event->buttons() & Qt::LeftButton && !isMaximized()) {
         move(event->globalPosition().toPoint() - dragPosition_);
         event->accept();
     }

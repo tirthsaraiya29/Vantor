@@ -5,6 +5,8 @@
   "description": "Production-grade, hardened Windows antivirus solution with native C++ Windows Service, memory-mapped signature index, and user-mode anti-tamper.",
   "dependencies": [
     "sqlite3",
+    "nlohmann-json",
+    "openssl",
     "gtest",
     "protobuf",
     "grpc"

@@ -39,6 +39,7 @@ bool SignatureStore::Initialize(const std::string& dbPath, const std::string& in
     // 1. Initialize SQLite Database
     sqlite3* db = nullptr;
     if (sqlite3_open(dbPath_.c_str(), &db) == SQLITE_OK) {
+        sqlite3_exec(db, "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
         const char* sql =
             "CREATE TABLE IF NOT EXISTS malware_hashes ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -184,19 +185,13 @@ void SignatureStore::CloseMemoryMap() {
     hashCount_ = 0;
 }
 
-bool SignatureStore::Contains(const std::string& sha256Hex) {
-    std::string lowerHex = ToLower(sha256Hex);
-    if (lowerHex.length() != 64) return false;
-
-    std::vector<uint8_t> hashBytes;
-    if (!crypto::HexToBytes(lowerHex, hashBytes) || hashBytes.size() != 32) {
-        return false;
-    }
+bool SignatureStore::Contains(const uint8_t rawSha256[32]) {
+    if (!rawSha256) return false;
 
     std::shared_lock<std::shared_mutex> lock(mutex_);
 
     // 1. O(1) Bloom Filter Check
-    if (!BloomMayContain(hashBytes.data())) {
+    if (!BloomMayContain(rawSha256)) {
         return false; // Negative lookup finished in < 50 CPU cycles
     }
 
@@ -208,7 +203,7 @@ bool SignatureStore::Contains(const std::string& sha256Hex) {
         while (low < high) {
             size_t mid = low + (high - low) / 2;
             const uint8_t* midHash = pHashArray_ + (mid * 32);
-            int cmp = memcmp(hashBytes.data(), midHash, 32);
+            int cmp = memcmp(rawSha256, midHash, 32);
             if (cmp == 0) {
                 return true; // Match found in memory map!
             } else if (cmp < 0) {
@@ -224,10 +219,14 @@ bool SignatureStore::Contains(const std::string& sha256Hex) {
     sqlite3* db = nullptr;
     bool found = false;
     if (sqlite3_open_v2(dbPath_.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
+        char hexStr[65] = {0};
+        for (int i = 0; i < 32; ++i) {
+            snprintf(hexStr + (i * 2), 3, "%02x", rawSha256[i]);
+        }
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT 1 FROM malware_hashes WHERE hash = ? LIMIT 1;";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, lowerHex.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(stmt, 1, hexStr, -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) == SQLITE_ROW) {
                 found = true;
             }
@@ -239,6 +238,18 @@ bool SignatureStore::Contains(const std::string& sha256Hex) {
     return found;
 }
 
+bool SignatureStore::Contains(const std::string& sha256Hex) {
+    std::string lowerHex = ToLower(sha256Hex);
+    if (lowerHex.length() != 64) return false;
+
+    std::vector<uint8_t> hashBytes;
+    if (!crypto::HexToBytes(lowerHex, hashBytes) || hashBytes.size() != 32) {
+        return false;
+    }
+
+    return Contains(hashBytes.data());
+}
+
 size_t SignatureStore::GetTotalSignatures() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return hashCount_;
@@ -248,7 +259,7 @@ bool SignatureStore::AddSignature(const std::string& sha256Hex) {
     return BulkImport({ sha256Hex }) > 0;
 }
 
-size_t SignatureStore::BulkImport(const std::vector<std::string>& sha256HexList) {
+size_t SignatureStore::BulkImport(const std::vector<std::string>& sha256HexList, bool rebuildIndex) {
     if (sha256HexList.empty()) return 0;
 
     std::unique_lock<std::shared_mutex> lock(mutex_);
@@ -280,8 +291,10 @@ size_t SignatureStore::BulkImport(const std::vector<std::string>& sha256HexList)
     sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
     sqlite3_close(db);
 
-    lock.unlock();
-    RebuildMemoryMappedIndex();
+    if (rebuildIndex) {
+        lock.unlock();
+        RebuildMemoryMappedIndex();
+    }
     return imported;
 }
 
@@ -302,14 +315,17 @@ size_t SignatureStore::ImportFromTextFile(const std::string& textFilePath) {
         if (line.length() == 64) {
             batch.push_back(line);
             if (batch.size() >= 50000) {
-                total += BulkImport(batch);
+                total += BulkImport(batch, false);
                 batch.clear();
             }
         }
     }
 
     if (!batch.empty()) {
-        total += BulkImport(batch);
+        total += BulkImport(batch, false);
+    }
+    if (total > 0) {
+        RebuildMemoryMappedIndex();
     }
     return total;
 }

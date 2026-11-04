@@ -12,11 +12,22 @@ set(TEST_SOURCES
     test_ipc.cpp
     test_crypto.cpp
     test_scanner.cpp
+    test_advanced_security.cpp
     ../SignatureStore.cpp
+    ../SignatureUpdater.cpp
+    ../ScheduledScanService.cpp
+    ../GrpcServer.cpp
     ../ZipBombDetector.cpp
     ../../service/AntiTamper.cpp
     ../../service/Scanner.cpp
     ../../service/ConfigManager.cpp
+    ../../service/ProcessMemoryAuditor.cpp
+    ../../service/PersistenceAuditor.cpp
+    ../../service/RealTimeProtection.cpp
+    ../../service/ThreatClassifier.cpp
+    ../../service/MLEngine.cpp
+    ../../service/DetonationChamber.cpp
+    ../../service/ScanHistoryStore.cpp
 )
 
 add_executable(VantorTests ${TEST_SOURCES} TestHarness.h)
@@ -49,6 +60,12 @@ target_link_libraries(VantorTests PRIVATE
     wintrust
     advapi32
     ws2_32
+    psapi
+    shell32
+    winhttp
+    taskschd
+    ole32
+    oleaut32
 )
 
 enable_testing()

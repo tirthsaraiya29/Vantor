@@ -24,6 +24,10 @@ public:
     bool IsPathExcluded(const std::string& path) const;
     void AddExclusion(const std::string& path);
     void RemoveExclusion(const std::string& path);
+    static bool ValidateExclusionPattern(const std::string& pattern, std::string& errorMsg);
+
+    // Policy Engine Evaluation (Major 13)
+    PolicyAction EvaluatePolicy(const ScanResult& result) const;
 
     // Export/import JSON representation
     std::string ToJson() const;

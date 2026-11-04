@@ -58,14 +58,17 @@ private:
     ~AntiTamper();
 
     void WatchdogWorker();
+    void EtwSubscriberWorker();
     void BackupProtectedFiles();
     bool RestoreFile(const std::wstring& filename);
 
     std::wstring appDir_;
     std::wstring backupDir_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> etwRunning_{false};
     std::atomic<HANDLE> hWatchdogDir_{INVALID_HANDLE_VALUE};
     std::thread watchdogThread_;
+    std::thread etwSubscriberThread_;
 
     // Baselines
     mutable std::mutex baselineMutex_;

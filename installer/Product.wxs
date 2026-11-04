@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
     <Product Id="*" 
              Name="Vantor Antivirus Endpoint Protection" 
              Language="1033" 
@@ -11,7 +12,7 @@
                  Compressed="yes" 
                  InstallScope="perMachine" 
                  Platform="x64" 
-                 Description="Vantor Antivirus Production Installer" />
+                 Description="Vantor Antivirus Production Enterprise Installer" />
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of Vantor Antivirus is already installed." />
         <MediaTemplate EmbedCab="yes" />
@@ -45,7 +46,7 @@
 
     <Fragment>
         <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-            <!-- Windows Service Executable -->
+            <!-- Windows Service Executable with RESTRICTED Service SID (Major 18) -->
             <Component Id="VantorServiceComponent" Win64="yes" Guid="1F3B5C7D-9A2E-4B8F-9C1D-3E5A7B9F1D2C">
                 <File Id="VantorServiceExe" Source="$(var.BinDir)\VantorService.exe" KeyPath="yes" />
                 <ServiceInstall Id="ServiceInstaller"
@@ -58,6 +59,9 @@
                                 Account="NT AUTHORITY\LocalSystem"
                                 ErrorControl="normal"
                                 Interactive="no" />
+                <util:ServiceConfig Id="VantorServiceSidConfig"
+                                    ServiceName="VantorAntivirusService"
+                                    ServiceSid="restricted" />
                 <ServiceControl Id="ServiceControl"
                                 Name="VantorAntivirusService"
                                 Start="install"
@@ -71,9 +75,9 @@
                 <File Id="VantorBackendExe" Source="$(var.BinDir)\VantorBackend.exe" KeyPath="yes" />
             </Component>
 
-            <!-- UI Executable -->
+            <!-- WPF / Qt UI Executable -->
             <Component Id="VantorUIComponent" Win64="yes" Guid="3A5D7E9F-1C4A-6D0B-1E3F-5A7C9D1F3A4E">
-                <File Id="VantorUIExe" Source="$(var.BinDir)\VantorUI.exe" KeyPath="yes" />
+                <File Id="VantorUIExe" Source="$(var.BinDir)\Vantor.exe" KeyPath="yes" />
             </Component>
 
             <!-- SQLite Runtime Library -->
@@ -85,6 +89,19 @@
             <Component Id="SignaturesDbComponent" Win64="yes" Guid="5C7F9A1B-3E6C-8F2D-3A5B-7C9E1F3B5C6A">
                 <File Id="SignaturesDb" Source="$(var.BinDir)\signatures.db" KeyPath="yes" />
             </Component>
+
+            <!-- Install Folder DACL Lockdown: SYSTEM/Admins full, Users Read/Execute only (Major 18) -->
+            <Component Id="InstallFolderSecurity" Win64="yes" Guid="7E9A1B2C-3D4E-5F6A-7B8C-9D0E1F2A3B4C">
+                <CreateFolder Directory="INSTALLFOLDER">
+                    <Permission User="NT AUTHORITY\SYSTEM" GenericAll="yes" />
+                    <Permission User="Builtin\Administrators" GenericAll="yes" />
+                    <Permission User="Builtin\Users" GenericRead="yes" GenericExecute="yes" />
+                </CreateFolder>
+                <CreateFolder Directory="QUARANTINEFOLDER">
+                    <Permission User="NT AUTHORITY\SYSTEM" GenericAll="yes" />
+                    <Permission User="Builtin\Administrators" GenericAll="yes" />
+                </CreateFolder>
+            </Component>
         </ComponentGroup>
 
         <!-- Start Menu Shortcuts -->
@@ -93,7 +110,7 @@
                 <Shortcut Id="ApplicationStartMenuShortcut"
                           Name="Vantor Antivirus"
                           Description="Launch Vantor Antivirus Endpoint Protection"
-                          Target="[INSTALLFOLDER]VantorUI.exe"
+                          Target="[INSTALLFOLDER]Vantor.exe"
                           WorkingDirectory="INSTALLFOLDER" />
                 <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
                 <RegistryValue Root="HKCU" Key="Software\VantorSecurity\Vantor" Name="installed" Type="integer" Value="1" KeyPath="yes" />

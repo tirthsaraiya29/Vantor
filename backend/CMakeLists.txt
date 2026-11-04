@@ -9,6 +9,8 @@ set(BACKEND_SOURCES
     SignatureStore.cpp
     ZipBombDetector.cpp
     GrpcServer.cpp
+    SignatureUpdater.cpp
+    ScheduledScanService.cpp
     ../service/AntiTamper.cpp
 )
 
@@ -16,6 +18,8 @@ set(BACKEND_HEADERS
     SignatureStore.h
     ZipBombDetector.h
     GrpcServer.h
+    SignatureUpdater.h
+    ScheduledScanService.h
     ../service/AntiTamper.h
     ../common/Common.h
     ../common/Crypto.h
@@ -56,6 +60,10 @@ target_link_libraries(VantorBackend PRIVATE
     wintrust
     advapi32
     ws2_32
+    winhttp
+    taskschd
+    ole32
+    oleaut32
 )
 
 add_subdirectory(tests)

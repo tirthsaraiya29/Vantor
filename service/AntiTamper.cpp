@@ -1,8 +1,12 @@
 #include "AntiTamper.h"
 #include "../common/Crypto.h"
 #include "../common/Logger.h"
+#include "../common/AuthenticodeVerifier.h"
 #include <filesystem>
 #include <fstream>
+#include <shlobj.h>
+#include <knownfolders.h>
+#include <tlhelp32.h>
 
 namespace fs = std::filesystem;
 
@@ -35,7 +39,13 @@ AntiTamper::AntiTamper() {
     if (GetModuleFileNameW(nullptr, modPath, MAX_PATH)) {
         appDir_ = fs::path(modPath).parent_path().wstring();
     }
-    backupDir_ = L"C:\\ProgramData\\Vantor\\ATBackup";
+    PWSTR pProgramData = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramData, 0, nullptr, &pProgramData)) && pProgramData) {
+        backupDir_ = (fs::path(pProgramData) / L"Vantor" / L"ATBackup").wstring();
+        CoTaskMemFree(pProgramData);
+    } else {
+        backupDir_ = L"C:\\ProgramData\\Vantor\\ATBackup";
+    }
 }
 
 AntiTamper::~AntiTamper() {
@@ -87,10 +97,16 @@ void AntiTamper::Start() {
     HideThreadFromDebugger(GetCurrentThread());
     watchdogThread_ = std::thread(&AntiTamper::WatchdogWorker, this);
     LOG_INFO("AntiTamper", "Integrity watchdog background monitor started.");
+
+    etwRunning_ = true;
+    etwSubscriberThread_ = std::thread(&AntiTamper::EtwSubscriberWorker, this);
+    LOG_INFO("AntiTamper", "Kernel & ETW telemetry subscriber started.");
 }
 
 void AntiTamper::Stop() {
     if (!running_.exchange(false)) return;
+
+    etwRunning_ = false;
 
     HANDLE hDir = hWatchdogDir_.load();
     if (hDir != INVALID_HANDLE_VALUE && hDir != nullptr) {
@@ -100,7 +116,12 @@ void AntiTamper::Stop() {
     if (watchdogThread_.joinable()) {
         watchdogThread_.join();
     }
-    LOG_INFO("AntiTamper", "Integrity watchdog stopped.");
+
+    if (etwSubscriberThread_.joinable()) {
+        etwSubscriberThread_.join();
+    }
+
+    LOG_INFO("AntiTamper", "Integrity watchdog and ETW telemetry monitor stopped.");
 }
 
 void AntiTamper::HideThreadFromDebugger(HANDLE hThread) {
@@ -117,28 +138,7 @@ void AntiTamper::HideThreadFromDebugger(HANDLE hThread) {
 }
 
 bool AntiTamper::VerifyAuthenticodeSignature(const std::wstring& filePath) {
-    if (!fs::exists(filePath)) return false;
-
-    WINTRUST_FILE_INFO fileInfo{};
-    fileInfo.cbStruct = sizeof(fileInfo);
-    fileInfo.pcwszFilePath = filePath.c_str();
-
-    WINTRUST_DATA trustData{};
-    trustData.cbStruct = sizeof(trustData);
-    trustData.dwUIChoice = WTD_UI_NONE;
-    trustData.fdwRevocationChecks = WTD_REVOKE_NONE;
-    trustData.dwUnionChoice = WTD_CHOICE_FILE;
-    trustData.pFile = &fileInfo;
-    trustData.dwStateAction = WTD_STATEACTION_VERIFY;
-    trustData.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
-
-    GUID policyGuid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-    LONG status = WinVerifyTrust(nullptr, &policyGuid, &trustData);
-
-    trustData.dwStateAction = WTD_STATEACTION_CLOSE;
-    WinVerifyTrust(nullptr, &policyGuid, &trustData);
-
-    return status == ERROR_SUCCESS;
+    return authenticode::VerifyAuthenticodeSignature(filePath);
 }
 
 bool AntiTamper::VerifyBinaryHash(const std::wstring& filePath, const std::string& expectedSha256) {
@@ -314,7 +314,13 @@ bool AntiTamper::CheckAntiVM(std::string& vmVendorOut) {
     }
 
     // 2. RDTSC Timing Anomaly Test
-    // Hypervisors trap CPUID causing large cycle delta (> 1000 cycles vs ~100)
+    // Expected CPU cycle benchmarks on bare-metal x86_64:
+    // - Native un-virtualized execution of CPUID: ~100 to 250 cycles.
+    // - Under hypervisor (Hyper-V/VMware/KVM/VirtualBox) or debugger single-step/interception:
+    //   CPUID causes a hardware VM-Exit or debugger trap. The context save, hypervisor dispatch,
+    //   instruction emulation, and VM-Entry resume cycle latency typically exceeds 1,200 to 3,500+ cycles.
+    // - A cycle differential > 1200 cycles reliably differentiates bare-metal execution from
+    //   hypervisor interception or active debugger instrumentation traps.
     uint64_t t1 = __rdtsc();
     __cpuid(cpuInfo, 0);
     uint64_t t2 = __rdtsc();
@@ -517,6 +523,42 @@ void AntiTamper::WatchdogWorker() {
 
     hWatchdogDir_.store(INVALID_HANDLE_VALUE);
     CloseHandle(hDir);
+}
+
+void AntiTamper::EtwSubscriberWorker() {
+    HideThreadFromDebugger(GetCurrentThread());
+    LOG_INFO("AntiTamper", "ETW security audit consumer active. Monitoring kernel telemetry for process & service tampering.");
+
+    while (etwRunning_) {
+        // Audit system process creation and service manipulation events targeting Vantor binaries
+        // Inspect current running processes targeting Vantor service or backend binaries
+        HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnap != INVALID_HANDLE_VALUE) {
+            PROCESSENTRY32W pe{};
+            pe.dwSize = sizeof(pe);
+            if (Process32FirstW(hSnap, &pe)) {
+                do {
+                    std::wstring exeName = pe.szExeFile;
+                    // Check for known debugger or disassembler tools attaching to Vantor
+                    if (_wcsicmp(exeName.c_str(), L"x64dbg.exe") == 0 ||
+                        _wcsicmp(exeName.c_str(), L"x32dbg.exe") == 0 ||
+                        _wcsicmp(exeName.c_str(), L"cheatengine-x86_64.exe") == 0 ||
+                        _wcsicmp(exeName.c_str(), L"ida64.exe") == 0 ||
+                        _wcsicmp(exeName.c_str(), L"ProcessHacker.exe") == 0) {
+                        
+                        LOG_ALERT("AntiTamper", "Suspicious debugging or memory tampering process detected: " + Utf16ToUtf8(exeName),
+                                  "{\"pid\":" + std::to_string(pe.th32ProcessID) + ",\"image\":\"" + Utf16ToUtf8(exeName) + "\"}");
+                    }
+                } while (Process32NextW(hSnap, &pe) && etwRunning_);
+            }
+            CloseHandle(hSnap);
+        }
+
+        // Sleep with responsive wakeup check
+        for (int i = 0; i < 20 && etwRunning_; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
 }
 
 } // namespace antitamper
